@@ -22,9 +22,7 @@ CROP_PARAMS: Dict[str, dict] = {
         "base_temp": 10,
         "total_gdd": 1600,
         "stage_thresholds": [0, 0.05, 0.15, 0.35, 0.55, 0.75, 1.0],
-        "max_height": 150,
-        "water_sensitivity": 0.3,
-        "light_sensitivity": 0.3,
+        "max_height": 80,
         "description": "一年生草本植物，喜温暖光照，果实营养丰富",
     },
     "wheat": {
@@ -33,8 +31,6 @@ CROP_PARAMS: Dict[str, dict] = {
         "total_gdd": 2000,
         "stage_thresholds": [0, 0.06, 0.18, 0.40, 0.55, 0.70, 1.0],
         "max_height": 80,
-        "water_sensitivity": 0.25,
-        "light_sensitivity": 0.35,
         "description": "禾本科植物，全球最重要的粮食作物之一",
     },
     "strawberry": {
@@ -42,9 +38,7 @@ CROP_PARAMS: Dict[str, dict] = {
         "base_temp": 8,
         "total_gdd": 1400,
         "stage_thresholds": [0, 0.05, 0.12, 0.30, 0.50, 0.70, 1.0],
-        "max_height": 30,
-        "water_sensitivity": 0.35,
-        "light_sensitivity": 0.25,
+        "max_height": 25,
         "description": "蔷薇科多年生草本，果实鲜美多汁",
     },
     "rice": {
@@ -52,9 +46,7 @@ CROP_PARAMS: Dict[str, dict] = {
         "base_temp": 12,
         "total_gdd": 2200,
         "stage_thresholds": [0, 0.05, 0.15, 0.35, 0.55, 0.75, 1.0],
-        "max_height": 100,
-        "water_sensitivity": 0.40,
-        "light_sensitivity": 0.30,
+        "max_height": 110,
         "description": "禾本科作物，喜高温多湿，主粮之一",
     },
     "corn": {
@@ -63,8 +55,6 @@ CROP_PARAMS: Dict[str, dict] = {
         "total_gdd": 1800,
         "stage_thresholds": [0, 0.05, 0.15, 0.35, 0.55, 0.75, 1.0],
         "max_height": 250,
-        "water_sensitivity": 0.30,
-        "light_sensitivity": 0.35,
         "description": "禾本科高产作物，重要的粮食与饲料来源",
     },
 }
@@ -100,48 +90,19 @@ class GrowthEngine:
         return 0, 0.0
 
     def calculate_height(self, progress: float, max_height: float) -> float:
-        height = max_height * (1 - math.exp(-4 * progress))
-        return round(height, 1)
-
-    def assess_health(
-        self,
-        precipitation: float,
-        sunshine_hours: float,
-        water_sensitivity: float,
-        light_sensitivity: float,
-        current_health: float,
-        user_care: float = 0,
-    ) -> float:
-        water_stress = 0
-        if precipitation < 1:
-            water_stress = -3 * water_sensitivity
-        elif precipitation > 15:
-            water_stress = -5 * water_sensitivity
-        else:
-            water_stress = 2 * water_sensitivity
-
-        light_stress = 0
-        if sunshine_hours < 2:
-            light_stress = -4 * light_sensitivity
-        elif sunshine_hours > 12:
-            light_stress = -1 * light_sensitivity
-        else:
-            light_stress = 2 * light_sensitivity
-
-        daily_change = water_stress + light_stress + user_care
-        new_health = current_health + daily_change
-        return round(max(0, min(100, new_health)), 1)
+        # Sigmoid growth: slow seedling → rapid vegetative → slow ripening
+        x = 12 * (progress - 0.4)
+        height = max_height / (1 + math.exp(-x))
+        return round(max(1.0, height), 1)
 
     def simulate_day(
         self,
         crop_type: str,
         accumulated_gdd: float,
-        current_health: float,
         temp_max: float,
         temp_min: float,
         precipitation: float,
         sunshine_hours: float,
-        user_care: float = 0,
     ) -> dict:
         params = self.crop_params.get(crop_type)
         if not params:
@@ -159,12 +120,6 @@ class GrowthEngine:
 
         height = self.calculate_height(total_progress, params["max_height"])
 
-        new_health = self.assess_health(
-            precipitation, sunshine_hours,
-            params["water_sensitivity"], params["light_sensitivity"],
-            current_health, user_care,
-        )
-
         return {
             "daily_gdd": round(daily_gdd, 2),
             "accumulated_gdd": round(new_gdd, 2),
@@ -173,17 +128,8 @@ class GrowthEngine:
             "stage_progress": round(stage_progress, 4),
             "total_progress": round(total_progress, 4),
             "height": height,
-            "health_score": new_health,
             "is_mature": stage >= GrowthStage.MATURE,
         }
-
-    def get_quality_grade(self, health_score: float) -> Tuple[str, str]:
-        if health_score >= 80:
-            return "大丰收", "🌟"
-        elif health_score >= 50:
-            return "正常收获", "✅"
-        else:
-            return "歉收", "💧"
 
 
 growth_engine = GrowthEngine()

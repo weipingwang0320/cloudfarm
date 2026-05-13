@@ -18,7 +18,6 @@ async def generate_diary(data: dict):
         stage=stage,
         stage_name=stage_name,
         weather_summary=weather_summary,
-        health_score=data.get("health_score", 100),
         day_number=data.get("day_number", 1),
         style=style,
         crop_type=crop_type,
@@ -43,7 +42,6 @@ async def generate_weekly_diary(data: dict):
         stage=stage,
         stage_name=stage_name,
         weather_summary=weather_summary,
-        health_score=data.get("health_score", 100),
         day_number=data.get("day_number", 1),
         style=style,
         crop_type=crop_type,
@@ -66,7 +64,6 @@ async def ask_assistant(data: dict):
         "crop_type": data.get("crop_type", "tomato"),
         "stage": data.get("stage", 0),
         "stage_name": STAGE_NAMES[data.get("stage", 0)] if 0 <= data.get("stage", 0) < len(STAGE_NAMES) else "未知",
-        "health_score": data.get("health_score", 100),
         "height": data.get("height", 0),
     }
 

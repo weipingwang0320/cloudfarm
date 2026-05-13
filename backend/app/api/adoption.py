@@ -23,9 +23,6 @@ async def create_certificate(data: dict):
         crop_type=data.get("crop_type", "tomato"),
         variety=data.get("variety", "普通品种"),
         grow_days=data.get("grow_days", 0),
-        health_score=data.get("health_score", 100),
-        quality_grade=data.get("quality_grade", "正常收获"),
-        quality_icon=data.get("quality_icon", "✅"),
         harvest_date=data.get("harvest_date", datetime.now().strftime("%Y-%m-%d")),
     )
     return {"success": True, "data": cert}
@@ -42,10 +39,7 @@ async def get_harvest_message(data: dict):
     msg = generate_harvest_message(
         owner_name=data.get("owner_name", "游客"),
         crop_type=data.get("crop_type", "tomato"),
-        health_score=data.get("health_score", 100),
         grow_days=data.get("grow_days", 0),
-        quality_grade=data.get("quality_grade", "正常收获"),
-        quality_icon=data.get("quality_icon", "✅"),
     )
     return {"success": True, "data": {"message": msg}}
 

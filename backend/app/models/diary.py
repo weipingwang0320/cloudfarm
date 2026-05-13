@@ -13,7 +13,6 @@ class Diary(Base):
     content = Column(Text, nullable=False)
     style = Column(String(20), default="cute")
     weather_summary = Column(String(200))
-    health_score = Column(Float)
     stage = Column(Integer)
     is_harvest_message = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())

@@ -9,7 +9,7 @@ const API_BASE = '/api'
 
 function App() {
   const [weather, setWeather] = useState(null)
-  const [healthStatus, setHealthStatus] = useState('ok')
+  const [weatherAlert, setWeatherAlert] = useState('ok')
   const location = useLocation()
 
   useEffect(() => {
@@ -24,9 +24,9 @@ function App() {
       if (res.data.success) {
         setWeather(res.data.data)
         if (res.data.alert) {
-          setHealthStatus('warning')
+          setWeatherAlert('warning')
         } else {
-          setHealthStatus('ok')
+          setWeatherAlert('ok')
         }
       }
     } catch (e) {
@@ -34,25 +34,46 @@ function App() {
     }
   }
 
-  const isActive = (path) => location.pathname === path ? 'nav-link active' : 'nav-link'
+  const isActive = (path) => location.pathname === path
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-left">
           <Link to="/" className="logo">
-            <span className="logo-icon">🌾</span>
+            <div className="logo-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22c4-4 8-7.582 8-12a8 8 0 1 0-16 0c0 4.418 4 8 8 12Z"/>
+                <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+              </svg>
+            </div>
             <span className="logo-text">云上田园</span>
           </Link>
         </div>
+
         <nav className="main-nav">
-          <Link to="/" className={isActive('/')}>首页</Link>
-          <Link to="/farm" className={isActive('/farm')}>智慧农场</Link>
+          <Link
+            to="/"
+            className={`nav-link ${isActive('/') ? 'active' : ''}`}
+          >
+            首页
+          </Link>
+          <Link
+            to="/farm"
+            className={`nav-link ${isActive('/farm') ? 'active' : ''}`}
+          >
+            智慧农场
+          </Link>
         </nav>
+
         <div className="header-right">
           {weather && (
-            <div className={`weather-badge ${healthStatus}`}>
-              <span className="weather-icon">{weather.weather_desc?.split(/[^\w]/)[0] || '☀️'}</span>
+            <div className={`weather-badge ${weatherAlert}`}>
+              <span className="weather-icon">
+                {weather.weather_desc?.includes('雨') ? '🌧'
+                  : weather.weather_desc?.includes('云') || weather.weather_desc?.includes('阴') ? '☁'
+                  : '☀'}
+              </span>
               <span className="weather-temp">{weather.avg_temp}°C</span>
             </div>
           )}

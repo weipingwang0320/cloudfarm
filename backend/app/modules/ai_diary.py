@@ -43,14 +43,14 @@ DIARY_TEMPLATES = {
 
 
 WEEKLY_TEMPLATES = [
-    "这周是我来到这个世界的第{week_num}周！{weather_summary} 这一周里，我努力地扎根、生长，感觉身体里充满了力量！{health_msg} 期待下一周能长得更高！",
-    "时间过得真快，已经是第{week_num}周啦！{weather_summary} 这周我长高了不少，叶子也变得更绿更茂盛了。{health_msg} 每天都能感受到阳光和雨露的滋养，好幸福～",
-    "第{week_num}周的总结时间！{weather_summary} 这周经历了一些小挑战，但我都挺过来啦！{health_msg} 感觉自己越来越坚强了，继续加油！",
-    "又过了一周，现在是第{week_num}周了。{weather_summary} 这周我学会了更好地适应环境，根系也扎得更深了。{health_msg} 成长的过程虽然缓慢，但每一步都算数！",
-    "哈喽！第{week_num}周的我准时来报到！{weather_summary} 这周最大的变化就是——我又变强壮了！{health_msg} 感谢主人的悉心照料，我会努力回报你的！",
-    "一周又过去了，现在是第{week_num}周。{weather_summary} 回顾这一周，有阳光灿烂的日子，也有风雨交加的时刻，但这些都是成长的养分。{health_msg} 期待下一周的蜕变！",
-    "第{week_num}周啦！时间过得好快呀！{weather_summary} 这周我认识了很多新朋友——小虫子、蝴蝶，还有隔壁地块的邻居们。{health_msg} 农场生活真是丰富多彩！",
-    "又到了写周记的时间，第{week_num}周了。{weather_summary} 这周我更加努力地吸收养分，希望能快快长大。{health_msg} 每一滴雨露都让我离梦想更近一步！",
+    "这周是我来到这个世界的第{week_num}周！{weather_summary} 这一周里，我努力地扎根、生长，感觉身体里充满了力量！{growth_msg} 期待下一周能长得更高！",
+    "时间过得真快，已经是第{week_num}周啦！{weather_summary} 这周我长高了不少，叶子也变得更绿更茂盛了。{growth_msg} 每天都能感受到阳光和雨露的滋养，好幸福～",
+    "第{week_num}周的总结时间！{weather_summary} 这周经历了一些小挑战，但我都挺过来啦！{growth_msg} 感觉自己越来越坚强了，继续加油！",
+    "又过了一周，现在是第{week_num}周了。{weather_summary} 这周我学会了更好地适应环境，根系也扎得更深了。{growth_msg} 成长的过程虽然缓慢，但每一步都算数！",
+    "哈喽！第{week_num}周的我准时来报到！{weather_summary} 这周最大的变化就是——我又变强壮了！{growth_msg} 感谢主人的悉心照料，我会努力回报你的！",
+    "一周又过去了，现在是第{week_num}周。{weather_summary} 回顾这一周，有阳光灿烂的日子，也有风雨交加的时刻，但这些都是成长的养分。{growth_msg} 期待下一周的蜕变！",
+    "第{week_num}周啦！时间过得好快呀！{weather_summary} 这周我认识了很多新朋友——小虫子、蝴蝶，还有隔壁地块的邻居们。{growth_msg} 农场生活真是丰富多彩！",
+    "又到了写周记的时间，第{week_num}周了。{weather_summary} 这周我更加努力地吸收养分，希望能快快长大。{growth_msg} 每一滴雨露都让我离梦想更近一步！",
 ]
 
 
@@ -88,7 +88,6 @@ class AIDiaryService:
         stage: int,
         stage_name: str,
         weather_summary: str,
-        health_score: float,
         day_number: int,
         style: str = "cute",
         crop_type: str = "tomato",
@@ -99,7 +98,6 @@ class AIDiaryService:
         crop_name = crop_names.get(crop_type, "作物")
 
         weather_msg = f"今天白天{temp_max or '?'}℃，夜间{temp_min or '?'}℃。"
-        weather_msg += f"健康值{health_score}分。"
 
         templates = DIARY_TEMPLATES.get(style, DIARY_TEMPLATES["cute"])
         stage_templates = templates.get(stage, templates.get(0))
@@ -113,7 +111,6 @@ class AIDiaryService:
                     {"role": "user", "content": f"""你是一株{crop_name}。今天是你的第{day_number}天，正处于{stage_name}阶段。
 今日天气：{weather_summary}
 温度：最高{temp_max}℃，最低{temp_min}℃
-健康值：{health_score}/100
 
 {style_prompt}
 
@@ -133,7 +130,6 @@ class AIDiaryService:
         stage: int,
         stage_name: str,
         weather_summary: str,
-        health_score: float,
         day_number: int,
         style: str = "cute",
         crop_type: str = "tomato",
@@ -146,19 +142,14 @@ class AIDiaryService:
         crop_names = {"tomato": "番茄", "wheat": "小麦", "strawberry": "草莓", "rice": "水稻", "corn": "玉米"}
         crop_name = crop_names.get(crop_type, "作物")
 
-        if health_score >= 80:
-            health_msg = "这周我身体棒棒的，吃得好睡得香！"
-        elif health_score >= 50:
-            health_msg = "这周身体状态还行，但感觉有点小疲惫，需要更多关爱～"
-        else:
-            health_msg = "这周有点不舒服，希望主人多来看看我！"
+        growth_msg = "每天都在努力生长，感觉充满了力量！"
 
         weather_desc = f"这周平均气温{week_avg_temp or temp_max or '?'}℃，{week_sunny_days}天晴天，{week_rain_days}天降雨。"
         template_idx = (week_num - 1) % len(WEEKLY_TEMPLATES)
         diary_text = WEEKLY_TEMPLATES[template_idx].format(
             week_num=week_num,
             weather_summary=weather_desc,
-            health_msg=health_msg,
+            growth_msg=growth_msg,
         )
 
         if self.provider == "glm" and self.glm_api_key:
@@ -171,7 +162,6 @@ class AIDiaryService:
 本周天气概况：{weather_summary}
 本周平均气温：{week_avg_temp or temp_max or '?'}℃
 本周晴天：{week_sunny_days}天，降雨：{week_rain_days}天
-当前健康值：{health_score}/100
 
 {style_prompt}
 
@@ -190,7 +180,6 @@ class AIDiaryService:
             try:
                 context = f"""作物类型：{crop_data.get('crop_type', '未知')}
 生长阶段：{crop_data.get('stage_name', '未知')}
-健康值：{crop_data.get('health_score', 0)}/100
 当前高度：{crop_data.get('height', 0)}cm
 """
                 messages = [
@@ -219,9 +208,7 @@ class AIDiaryService:
         if "施肥" in q or "fertilizer" in q:
             return "🌱 生长期可每7-10天施一次稀薄液肥。开花结果期增施磷钾肥，能促进开花结果。注意薄肥勤施，避免肥害。"
         if "叶子" in q and ("黄" in q or "枯" in q):
-            if crop_data.get("health_score", 100) < 50:
-                return "🍂 叶片发黄可能与浇水过多（根部缺氧）或养分不足有关。建议检查土壤湿度，暂停浇水2-3天，观察是否改善。"
-            return "🍃 少量底部叶片变黄是正常新陈代谢，摘除即可。如果大面积发黄，可能需要检查是否有病虫害。"
+            return "🍃 叶片发黄可能是浇水过多、养分不足或正常新陈代谢。建议检查土壤湿度，暂停浇水2-3天观察。如大面积发黄，需检查是否有病虫害。"
         if "虫" in q or "病" in q:
             return "🐛 建议先检查叶片背面和茎部是否有虫卵或病斑。预防为主，保持通风透光，必要时可使用生物农药。"
         if "收获" in q or "harvest" in q:

@@ -20,12 +20,10 @@ async def simulate_growth(data: dict):
     result = growth_engine.simulate_day(
         crop_type=data.get("crop_type", "tomato"),
         accumulated_gdd=data.get("accumulated_gdd", 0),
-        current_health=data.get("current_health", 100),
         temp_max=data.get("temp_max", 25),
         temp_min=data.get("temp_min", 15),
         precipitation=data.get("precipitation", 0),
         sunshine_hours=data.get("sunshine_hours", 8),
-        user_care=data.get("user_care", 0),
     )
     if result:
         return {"success": True, "data": result}

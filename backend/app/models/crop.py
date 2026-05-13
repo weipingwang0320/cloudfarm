@@ -12,7 +12,6 @@ class Crop(Base):
     crop_type = Column(String(50), nullable=False)
     stage = Column(Integer, default=0)
     stage_progress = Column(Float, default=0.0)
-    health_score = Column(Float, default=100.0)
     accumulated_gdd = Column(Float, default=0.0)
     height = Column(Float, default=0.0)
     plant_date = Column(DateTime, server_default=func.now())

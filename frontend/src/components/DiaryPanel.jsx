@@ -27,37 +27,63 @@ export default function DiaryPanel({ entries }) {
   }
 
   return (
-    <div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="panel-header">
-        <div className="panel-icon" style={{ background: '#fce4ec' }}>📖</div>
-        <span className="panel-title">AI生长周记</span>
+        <div className="panel-icon" style={{ background: 'rgba(139,115,85,0.1)' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--earth-brown)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+          </svg>
+        </div>
+        <span className="panel-title">生长日记</span>
         {entries.length > 0 && (
           <span className="badge badge-success" style={{ marginLeft: 'auto' }}>
-            共{entries.length}篇
+            {entries.length} 篇
           </span>
         )}
       </div>
 
       {entries.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '16px 8px' }}>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '40px 20px',
+        }}>
           <div style={{
-            width: 48, height: 48, borderRadius: '50%',
-            background: '#f0fdf0', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontSize: 24, margin: '0 auto 10px',
+            width: '80px',
+            height: '80px',
+            background: 'linear-gradient(135deg, rgba(90,114,71,0.1) 0%, rgba(107,142,35,0.05) 100%)',
+            borderRadius: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '20px',
           }}>
-            🌱
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22c4-4 8-7.582 8-12a8 8 0 1 0-16 0c0 4.418 4 8 8 12Z"/>
+              <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+            </svg>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--text-light)' }}>认领地块后开始种植</p>
-          <p style={{ fontSize: 12, color: '#bbb', marginTop: 4 }}>AI将每周为你生成生长周记</p>
+          <p style={{ fontSize: '15px', color: 'var(--earth-dark)', fontWeight: '500', marginBottom: '8px' }}>
+            开始你的种植之旅
+          </p>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+            选择一块土地，种下种子<br />每周自动生成生长日记
+          </p>
         </div>
       ) : (
         <div
           ref={scrollRef}
           onScroll={handleScroll}
           style={{
-            maxHeight: 380, overflowY: 'auto',
-            display: 'flex', flexDirection: 'column', gap: 8,
-            paddingRight: 2,
+            flex: 1,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            paddingRight: '4px',
           }}
         >
           {[...entries].sort((a, b) => b.day - a.day).map((entry, i) => (
@@ -65,50 +91,59 @@ export default function DiaryPanel({ entries }) {
               key={entry.id}
               className="fade-in"
               style={{
-                padding: '12px 14px',
-                background: i === 0 ? '#f0fdf0' : '#f8faf8',
-                borderRadius: 12,
-                border: i === 0 ? '1px solid #a5d6a7' : '1px solid #e8ece8',
-                boxShadow: i === 0 ? '0 2px 8px rgba(76,175,80,0.1)' : 'none',
+                padding: '16px',
+                background: i === 0
+                  ? 'linear-gradient(135deg, rgba(90,114,71,0.08) 0%, rgba(107,142,35,0.04) 100%)'
+                  : 'var(--paper-cream)',
+                borderRadius: '14px',
+                border: i === 0 ? '1px solid rgba(90,114,71,0.2)' : '1px solid transparent',
+                boxShadow: i === 0 ? '0 4px 12px rgba(90,114,71,0.08)' : 'none',
+                transition: 'all 0.3s ease',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{
-                  fontSize: 12, fontWeight: 600, color: '#2e7d32',
-                  display: 'flex', alignItems: 'center', gap: 4,
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
                 }}>
-                  <span style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: '#4caf50', display: 'inline-block',
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: 'var(--primary)',
                   }} />
-                  {entry.stage}
-                </span>
+                  <span style={{
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: 'var(--primary)',
+                  }}>
+                    {entry.stage}
+                  </span>
+                </div>
                 <span style={{
-                  fontSize: 11, color: '#999',
-                  background: '#f0f4f0', padding: '1px 8px', borderRadius: 8,
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  background: 'white',
+                  padding: '4px 10px',
+                  borderRadius: '8px',
                 }}>
                   第{entry.week || Math.ceil(entry.day / 7)}周 · 第{entry.day}天
                 </span>
               </div>
-              <p style={{ fontSize: 13, lineHeight: 1.7, color: '#444' }}>{entry.content}</p>
-              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 11, color: '#aaa' }}>健康度</span>
-                <div style={{ flex: 1, height: 3, background: '#e8f5e9', borderRadius: 2 }}>
-                  <div style={{
-                    width: `${entry.health}%`,
-                    height: '100%',
-                    background: entry.health >= 80 ? '#4caf50' : entry.health >= 50 ? '#ff9800' : '#f44336',
-                    borderRadius: 2,
-                    transition: 'width 0.5s',
-                  }} />
-                </div>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, minWidth: 24, textAlign: 'right',
-                  color: entry.health >= 80 ? '#4caf50' : entry.health >= 50 ? '#ff9800' : '#f44336',
-                }}>
-                  {entry.health}
-                </span>
-              </div>
+
+              <p style={{
+                fontSize: '14px',
+                lineHeight: 1.75,
+                color: 'var(--text-primary)',
+              }}>
+                {entry.content}
+              </p>
             </div>
           ))}
         </div>

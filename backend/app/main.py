@@ -4,11 +4,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db, close_db
-from app.api import weather, crop, sensor, diary, adoption
+from app.api import weather, sensor, diary
 from app.modules.weather import weather_service
 from app.modules.sensor import sensor_simulator
 
@@ -45,7 +44,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="气象驱动型元宇宙认养农场系统 - 后端API",
+    description="气象驱动型智慧农场 - 实时天气与环境监测系统",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -59,10 +58,8 @@ app.add_middleware(
 )
 
 app.include_router(weather.router)
-app.include_router(crop.router)
 app.include_router(sensor.router)
 app.include_router(diary.router)
-app.include_router(adoption.router)
 
 
 @app.get("/api/health")
@@ -76,7 +73,6 @@ async def health_check():
 
 @app.get("/api/dashboard")
 async def get_dashboard():
-    weather_data = await weather_service.get_forecast(days=3)
     current_weather = weather_service.get_current_weather()
 
     sensor_data = None
@@ -93,7 +89,6 @@ async def get_dashboard():
         "success": True,
         "data": {
             "weather": current_weather,
-            "forecast": weather_data,
             "sensor": sensor_data["data"] if sensor_data else None,
             "alert": weather_service.is_extreme_weather(current_weather) if current_weather else None,
         },
@@ -111,7 +106,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if action == "subscribe_weather":
                 for _ in range(60):
-                    weather_data = await weather_service.get_forecast(days=1)
                     current = weather_service.get_current_weather()
                     await websocket.send_json({
                         "type": "weather_update",

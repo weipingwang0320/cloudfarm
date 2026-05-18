@@ -7,16 +7,6 @@ from typing import Optional
 import httpx
 from app.config import settings
 
-
-CROP_SEASONS = {
-    "tomato": {"plant": (3, 6), "harvest": (6, 10)},
-    "wheat": {"plant": (3, 5), "harvest": (7, 9)},
-    "strawberry": {"plant": (2, 4), "harvest": (5, 7)},
-    "rice": {"plant": (4, 6), "harvest": (8, 10)},
-    "corn": {"plant": (4, 6), "harvest": (8, 10)},
-}
-
-
 class WeatherData:
     def __init__(
         self,

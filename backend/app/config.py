@@ -13,10 +13,9 @@ class Settings(BaseSettings):
     GLM_MODEL: str = "glm-4-flash"
 
     WEATHER_API_BASE: str = "https://api.open-meteo.com/v1"
-    DEFAULT_LATITUDE: float = 30.5728
-    DEFAULT_LONGITUDE: float = 104.0668
+    DEFAULT_LATITUDE: float = 30.50
+    DEFAULT_LONGITUDE: float = 114.34
     SENSOR_UPDATE_INTERVAL: int = 5
-    CROP_GROWTH_INTERVAL: int = 86400
 
     class Config:
         env_file = ".env"

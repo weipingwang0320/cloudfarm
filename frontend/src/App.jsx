@@ -62,7 +62,7 @@ function App() {
             to="/farm"
             className={`nav-link ${isActive('/farm') ? 'active' : ''}`}
           >
-            智慧农场
+            气象监测站
           </Link>
         </nav>
 

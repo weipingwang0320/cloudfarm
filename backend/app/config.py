@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # 智谱 GLM 配置
     GLM_API_KEY: str = ""
     GLM_MODEL: str = "glm-4-flash"
+    GLM_VISION_MODEL: str = "glm-4v-flash"
 
     WEATHER_API_BASE: str = "https://api.open-meteo.com/v1"
     DEFAULT_LATITUDE: float = 30.50

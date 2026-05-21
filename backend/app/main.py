@@ -7,9 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db, close_db
-from app.api import weather, sensor, diary
+from app.api import weather, sensor, diary, calendar, fertilizer, disease
 from app.modules.weather import weather_service
 from app.modules.sensor import sensor_simulator
+from app.middleware.rate_limit import RateLimitMiddleware
 
 
 class ConnectionManager:
@@ -49,6 +50,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RateLimitMiddleware, requests_per_minute=10)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,6 +62,9 @@ app.add_middleware(
 app.include_router(weather.router)
 app.include_router(sensor.router)
 app.include_router(diary.router)
+app.include_router(calendar.router)
+app.include_router(fertilizer.router)
+app.include_router(disease.router)
 
 
 @app.get("/api/health")

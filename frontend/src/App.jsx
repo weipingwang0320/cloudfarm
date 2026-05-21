@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import FarmPage from './pages/FarmPage'
+import CalendarPage from './pages/CalendarPage'
+import FertilizerCalculatorPage from './pages/FertilizerCalculatorPage'
+import DiseaseIdentifierPage from './pages/DiseaseIdentifierPage'
+import AIAssistantPage from './pages/AIAssistantPage'
 import axios from 'axios'
 import './App.css'
 
@@ -64,6 +68,30 @@ function App() {
           >
             气象监测站
           </Link>
+          <Link
+            to="/calendar"
+            className={`nav-link ${isActive('/calendar') ? 'active' : ''}`}
+          >
+            生长日历
+          </Link>
+          <Link
+            to="/fertilizer"
+            className={`nav-link ${isActive('/fertilizer') ? 'active' : ''}`}
+          >
+            施肥计算
+          </Link>
+          <Link
+            to="/disease"
+            className={`nav-link ${isActive('/disease') ? 'active' : ''}`}
+          >
+            病害识别
+          </Link>
+          <Link
+            to="/assistant"
+            className={`nav-link ${isActive('/assistant') ? 'active' : ''}`}
+          >
+            AI助手
+          </Link>
         </nav>
 
         <div className="header-right">
@@ -84,6 +112,10 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/farm" element={<FarmPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/fertilizer" element={<FertilizerCalculatorPage />} />
+          <Route path="/disease" element={<DiseaseIdentifierPage />} />
+          <Route path="/assistant" element={<AIAssistantPage />} />
         </Routes>
       </main>
     </div>

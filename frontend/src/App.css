@@ -643,3 +643,42 @@ h1, h2, h3, h4 {
     padding: 20px;
   }
 }
+
+/* Fertilizer Calculator - Range Slider */
+.fertilizer-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--primary) var(--fill-percent, 50%), #E8E4D9 var(--fill-percent, 50%));
+  outline: none;
+  cursor: pointer;
+}
+
+.fertilizer-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.fertilizer-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.fertilizer-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  cursor: pointer;
+}

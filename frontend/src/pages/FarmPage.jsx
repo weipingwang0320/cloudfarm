@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
-import WeatherPanel from '../components/WeatherPanel'
 import SensorPanel from '../components/SensorPanel'
-import ChatBot from '../components/ChatBot'
 
 const API_BASE = '/api'
 
@@ -10,7 +8,6 @@ export default function FarmPage() {
   const [weather, setWeather] = useState(null)
   const [forecast, setForecast] = useState([])
   const [sensor, setSensor] = useState(null)
-  const [showChat, setShowChat] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -27,7 +24,7 @@ export default function FarmPage() {
   const fetchWeather = async () => {
     try {
       const res = await axios.get(`${API_BASE}/weather/forecast?days=3`)
-      if (res.data.success) {
+      if (res.data && res.data.success) {
         setWeather(res.data.data[0])
         setForecast(res.data.data)
       }
@@ -40,7 +37,10 @@ export default function FarmPage() {
   const fetchSensor = async () => {
     try {
       const res = await axios.get(`${API_BASE}/sensors/current`)
-      if (res.data.success) setSensor(res.data.data.data)
+      if (res.data && res.data.success) {
+        const sensorData = res.data.data
+        setSensor(sensorData.data || sensorData)
+      }
     } catch (e) {
       console.log('Sensor fetch failed')
     }
@@ -343,52 +343,6 @@ export default function FarmPage() {
           </>
         )}
       </div>
-
-      {/* AI Chat Button */}
-      <button
-        onClick={() => setShowChat(true)}
-        style={{
-          position: 'fixed',
-          bottom: '32px',
-          right: '32px',
-          zIndex: 50,
-          width: '60px',
-          height: '60px',
-          borderRadius: '20px',
-          background: 'linear-gradient(135deg, var(--primary) 0%, var(--leaf-green) 100%)',
-          color: 'white',
-          border: 'none',
-          cursor: 'pointer',
-          boxShadow: '0 8px 32px rgba(90,114,71,0.4)',
-          transition: 'all 0.3s ease',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.transform = 'scale(1.1) translateY(-4px)'
-          e.currentTarget.style.boxShadow = '0 12px 40px rgba(90,114,71,0.5)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.transform = 'scale(1) translateY(0)'
-          e.currentTarget.style.boxShadow = '0 8px 32px rgba(90,114,71,0.4)'
-        }}
-        title="AI 农场助手"
-      >
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          <circle cx="9" cy="10" r="1"/>
-          <circle cx="12" cy="10" r="1"/>
-          <circle cx="15" cy="10" r="1"/>
-        </svg>
-      </button>
-
-      {/* ChatBot Modal */}
-      {showChat && (
-        <ChatBot
-          onClose={() => setShowChat(false)}
-        />
-      )}
 
       <style>{`
         @keyframes float {

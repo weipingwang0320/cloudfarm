@@ -2,113 +2,134 @@
 set -e
 
 # ============================================================
-# Cloud Farm 一键部署脚本（适用于腾讯云 CVM Ubuntu 22.04/24.04）
-# 用法: 在服务器上运行
-#   git clone https://github.com/weipingwang0320/cloudfarm.git
-#   cd cloud-farm
-#   chmod +x scripts/deploy.sh
-#   sudo bash scripts/deploy.sh
+# Cloud Farm 一键部署脚本（兼容 Ubuntu / CentOS / TencentOS）
 # ============================================================
 
-# ---- 配置（按需修改）----
 GIT_REPO="https://github.com/weipingwang0320/cloudfarm.git"
 BRANCH="main"
-DOMAIN=""                      # 你的域名（留空用 IP 访问）
 
-# ---- 颜色输出 ----
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
-
 log()  { echo -e "${GREEN}[✓]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 err()  { echo -e "${RED}[✗]${NC} $1"; }
 
-# ---- 检查 root 权限 ----
 if [ "$EUID" -ne 0 ]; then
-    err "请使用 sudo 运行: sudo bash scripts/deploy.sh"
+    err "请使用 root 运行"
     exit 1
 fi
 
-# ---- 1. 系统更新 & 安装基础依赖 ----
-log "更新系统包..."
-apt update && apt upgrade -y
+# ---- Detect OS & set package manager ----
+if command -v apt &> /dev/null; then
+    PKG="apt"
+    NGINX_CONF_DIR="/etc/nginx/sites-available"
+    NGINX_ENABLE_DIR="/etc/nginx/sites-enabled"
+    NODE_SETUP_URL="https://deb.nodesource.com/setup_22.x"
+elif command -v dnf &> /dev/null; then
+    PKG="dnf"
+    NGINX_CONF_DIR="/etc/nginx/conf.d"
+    NGINX_ENABLE_DIR="$NGINX_CONF_DIR"  # same dir on CentOS
+    NODE_SETUP_URL="https://rpm.nodesource.com/setup_22.x"
+elif command -v yum &> /dev/null; then
+    PKG="yum"
+    NGINX_CONF_DIR="/etc/nginx/conf.d"
+    NGINX_ENABLE_DIR="$NGINX_CONF_DIR"
+    NODE_SETUP_URL="https://rpm.nodesource.com/setup_22.x"
+else
+    err "未检测到 apt/dnf/yum，无法继续"
+    exit 1
+fi
+log "检测到包管理器: $PKG"
 
-log "安装 Python、Nginx、Git..."
-apt install -y python3 python3-pip python3-venv nginx git curl
+# ---- 1. 安装基础依赖（跳过已有的） ----
+log "安装 Python、Nginx、Git（如未安装）..."
+if [ "$PKG" = "apt" ]; then
+    apt update -y && apt install -y python3 python3-pip python3-venv nginx git curl
+else
+    $PKG install -y python3 python3-pip python3-virtualenv nginx git curl 2>/dev/null || \
+    $PKG install -y python3 python3-pip python3-venv nginx git curl 2>/dev/null || \
+    $PKG install -y python3 python3-pip nginx git curl || true
+fi
 
-# ---- 2. 安装 Node.js 22（Ubuntu apt 自带版本太旧，Vite 需要 >=18） ----
-log "安装 Node.js 22（从 NodeSource）..."
-if ! command -v node &> /dev/null || [ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 18 ]; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    apt install -y nodejs
+# ---- 2. 安装 Node.js 22 ----
+log "安装/更新 Node.js 22..."
+NEED_NODE=false
+if ! command -v node &> /dev/null; then
+    NEED_NODE=true
+elif [ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 18 ]; then
+    NEED_NODE=true
+fi
+if $NEED_NODE; then
+    curl -fsSL "$NODE_SETUP_URL" | bash -
+    if [ "$PKG" = "apt" ]; then
+        apt install -y nodejs
+    else
+        $PKG install -y nodejs
+    fi
 fi
 log "Node.js $(node -v), npm $(npm -v)"
 
-# ---- 3. 克隆/更新项目 ----
-log "获取项目代码..."
+# ---- 3. 确保项目在 /opt/cloud-farm ----
 if [ ! -d "/opt/cloud-farm" ]; then
     cd /opt
     git clone -b "$BRANCH" "$GIT_REPO" cloud-farm
 else
-    cd /opt/cloud-farm
-    git pull origin "$BRANCH"
-    log "项目已存在，已拉取最新代码"
+    log "项目已存在，跳过克隆"
 fi
-
 cd /opt/cloud-farm
 
-# ---- 4. 配置后端环境变量 ----
-log "配置后端环境变量..."
+# ---- 4. 后端环境变量（首次部署时） ----
 if [ ! -f "backend/.env" ]; then
     cp backend/.env.example backend/.env
-    echo ""
     warn "============================================="
-    warn "  请现在编辑 backend/.env 填写 GLM_API_KEY"
-    warn "  打开新终端执行: sudo nano backend/.env"
-    warn "  填好 Key 后按 Enter 继续..."
+    warn "  请编辑 backend/.env 填写 GLM_API_KEY"
+    warn "  nano /opt/cloud-farm/backend/.env"
+    warn "  填好后按 Enter 继续..."
     warn "============================================="
     read -r -p ""
 fi
 
-# ---- 5. 后端 Python 虚拟环境 & 依赖 ----
-log "创建 Python 虚拟环境..."
-cd backend
-python3 -m venv venv
+# ---- 5. 后端 Python 虚拟环境 ----
+log "设置 Python 虚拟环境..."
+cd /opt/cloud-farm/backend
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
 source venv/bin/activate
-
-log "安装 Python 依赖..."
 pip install -r requirements.txt
-cd ..
 
-# ---- 6. 构建前端（生产模式） ----
+# ---- 6. 构建前端 ----
 log "构建前端（生产模式）..."
-cd frontend
+cd /opt/cloud-farm/frontend
 npm install
 npm run build
-cd ..
-
-log "前端构建产物:"
-ls -lh frontend/dist/ | head -5
+log "前端构建完成"
 
 # ---- 7. 部署静态文件 ----
-log "部署前端静态文件到 /var/www/cloud-farm..."
+log "部署静态文件..."
 rm -rf /var/www/cloud-farm
 mkdir -p /var/www/cloud-farm
-cp -r frontend/dist/* /var/www/cloud-farm/
-log "静态文件已就位: $(ls /var/www/cloud-farm | wc -l) 个文件"
+cp -r dist/* /var/www/cloud-farm/
 
 # ---- 8. 配置 Nginx ----
 log "配置 Nginx..."
-cp scripts/cloud-farm.conf /etc/nginx/sites-available/cloud-farm
-ln -sf /etc/nginx/sites-available/cloud-farm /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl restart nginx
-log "Nginx 已启动"
+cd /opt/cloud-farm
+if [ "$PKG" = "apt" ]; then
+    # Ubuntu/Debian style
+    mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+    cp scripts/cloud-farm.conf /etc/nginx/sites-available/cloud-farm
+    ln -sf /etc/nginx/sites-available/cloud-farm /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default
+else
+    # CentOS/TencentOS style
+    cp scripts/cloud-farm.conf /etc/nginx/conf.d/cloud-farm.conf
+fi
+nginx -t && systemctl restart nginx
+log "Nginx 已重启"
 
-# ---- 9. 配置 systemd 服务 ----
+# ---- 9. 配置 systemd ----
 log "配置 systemd 服务..."
 cp scripts/cloud-farm.service /etc/systemd/system/
 systemctl daemon-reload
@@ -116,44 +137,23 @@ systemctl enable cloud-farm
 systemctl restart cloud-farm
 
 # ---- 10. 完成 ----
-sleep 2  # 等后端启动
-
+sleep 2
 SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "你的服务器IP")
 
 log "部署完成！"
 echo ""
 echo "============================================="
 echo "   ☁️  云上田园 · Cloud Farm"
-echo "   部署成功！"
 echo "============================================="
-echo ""
-echo "  前端 + API:  http://$SERVER_IP"
-echo "  后端健康检查: http://$SERVER_IP/api/health"
+echo "  http://$SERVER_IP"
 echo ""
 
-# 检查后端是否启动成功
 if curl -s "http://127.0.0.1:8000/api/health" > /dev/null 2>&1; then
-    log "后端服务正常运行 ✓"
+    log "后端 ✓"
 else
-    warn "后端可能尚未启动，请检查日志:"
-    echo "  sudo journalctl -u cloud-farm -f"
+    warn "后端启动中，查看: journalctl -u cloud-farm -f"
 fi
 
 echo ""
-echo "  常用命令:"
-echo "  查看后端日志: sudo journalctl -u cloud-farm -f"
-echo "  重启后端:     sudo systemctl restart cloud-farm"
-echo "  重启 Nginx:   sudo systemctl restart nginx"
-echo "  更新部署:     cd /opt/cloud-farm && git pull && sudo bash scripts/deploy.sh"
+echo "  或直接访问: http://$SERVER_IP"
 echo "============================================="
-
-# ---- 提醒：Turnstile 密钥 ----
-echo ""
-warn "============================================="
-warn "  提醒：如需启用 Cloudflare Turnstile 人机验证："
-warn "  1. 访问 https://dash.cloudflare.com/ → Turnstile"
-warn "  2. 添加站点，获取 sitekey"
-warn "  3. 编辑 frontend/src/pages/AIAssistantPage.jsx 顶部"
-warn "     替换 TURNSTILE_SITEKEY 为你的真实密钥"
-warn "  4. 重新构建: cd /opt/cloud-farm && sudo bash scripts/deploy.sh"
-warn "============================================="

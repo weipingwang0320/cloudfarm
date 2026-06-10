@@ -5,10 +5,12 @@ const API_BASE = '/api'
 const HISTORY_KEY = 'cloud_farm_ai_history'
 const MAX_HISTORY = 50
 
-// ── Cloudflare Turnstile ──
-// 上线前请到 https://dash.cloudflare.com/ → Turnstile → 添加站点
-// 免费获取你自己的 sitekey，替换下面这行即可
-const TURNSTILE_SITEKEY = '1x00000000000000000000AA' // ← 测试密钥（始终通过），上线时改这里
+// ── 人机验证：简单数学题，零外部依赖 ──
+const genCaptcha = () => {
+  const a = Math.floor(Math.random() * 8) + 2   // 2~9
+  const b = Math.floor(Math.random() * 8) + 2   // 2~9
+  return { question: `${a} + ${b} = ?`, answer: a + b }
+}
 
 const formatTime = () => {
   const now = new Date()
@@ -330,12 +332,14 @@ export default function AIAssistantPage() {
   const [copiedIdx, setCopiedIdx] = useState(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
-  // ── Turnstile verification ──
-  const [turnstileVerified, setTurnstileVerified] = useState(false)
-  const [showTurnstile, setShowTurnstile] = useState(false)
+  // ── 数学验证码 ──
+  const [captchaVerified, setCaptchaVerified] = useState(false)
+  const [showCaptcha, setShowCaptcha] = useState(false)
+  const [captchaData, setCaptchaData] = useState(() => genCaptcha())
+  const [captchaInput, setCaptchaInput] = useState('')
+  const [captchaError, setCaptchaError] = useState(false)
   const pendingTextRef = useRef('')
-  const turnstileRef = useRef(null)
-  const turnstileWidgetId = useRef(null)
+  const captchaInputRef = useRef(null)
 
   // Count messages sent by user (exclude initial welcome bot message)
   const userMsgCount = messages.filter(m => m.role === 'user').length
@@ -390,55 +394,45 @@ export default function AIAssistantPage() {
     setTimeout(() => textareaRef.current?.focus(), 300)
   }, [])
 
-  // ── Turnstile: render widget when modal opens, clean up ──
+  // ── Captcha: auto-focus input when modal opens ──
   useEffect(() => {
-    if (!showTurnstile) return
-
-    // Give the DOM time to render the container before initializing widget
-    const timer = setTimeout(() => {
-      if (turnstileRef.current && window.turnstile) {
-        if (turnstileWidgetId.current !== null) {
-          window.turnstile.remove(turnstileWidgetId.current)
-        }
-        turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
-          sitekey: TURNSTILE_SITEKEY,
-          theme: 'light',
-          language: 'zh-cn',
-          callback: (token) => {
-            setTurnstileVerified(true)
-            setShowTurnstile(false)
-            const pending = pendingTextRef.current
-            pendingTextRef.current = ''
-            if (pending) {
-              sendMessage(pending, true)
-            }
-          },
-          'expired-callback': () => {
-            // Token expired, reset widget
-            if (turnstileWidgetId.current !== null) {
-              window.turnstile.reset(turnstileWidgetId.current)
-            }
-          },
-        })
-      }
-    }, 200)
-
-    return () => {
-      clearTimeout(timer)
-      if (turnstileWidgetId.current !== null && window.turnstile) {
-        window.turnstile.remove(turnstileWidgetId.current)
-        turnstileWidgetId.current = null
-      }
+    if (showCaptcha) {
+      setTimeout(() => captchaInputRef.current?.focus(), 100)
     }
-  }, [showTurnstile])
+  }, [showCaptcha])
+
+  // ── Captcha submit handler ──
+  const handleCaptchaSubmit = () => {
+    const num = parseInt(captchaInput, 10)
+    if (num === captchaData.answer) {
+      setCaptchaVerified(true)
+      setShowCaptcha(false)
+      setCaptchaInput('')
+      setCaptchaError(false)
+      const pending = pendingTextRef.current
+      pendingTextRef.current = ''
+      if (pending) {
+        sendMessage(pending, true)
+      }
+    } else {
+      setCaptchaError(true)
+      setCaptchaInput('')
+      setCaptchaData(genCaptcha()) // refresh question on failure
+      setTimeout(() => setCaptchaError(false), 600)
+      setTimeout(() => captchaInputRef.current?.focus(), 100)
+    }
+  }
 
   const sendMessage = async (text, skipVerification = false) => {
     if (!text.trim() || loading) return
 
-    // ── Turnstile check: trigger on second question onwards ──
-    if (!skipVerification && !turnstileVerified && userMsgCount >= 1) {
+    // ── Captcha check: trigger on second question onwards ──
+    if (!skipVerification && !captchaVerified && userMsgCount >= 1) {
       pendingTextRef.current = text
-      setShowTurnstile(true)
+      setCaptchaData(genCaptcha())
+      setCaptchaInput('')
+      setCaptchaError(false)
+      setShowCaptcha(true)
       return
     }
 
@@ -536,6 +530,13 @@ export default function AIAssistantPage() {
         @keyframes shimmer {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
+        }
+        @keyframes captchaShake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-6px); }
+          40% { transform: translateX(6px); }
+          60% { transform: translateX(-4px); }
+          80% { transform: translateX(4px); }
         }
         .chat-scroll::-webkit-scrollbar { width: 5px; }
         .chat-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -1079,8 +1080,8 @@ export default function AIAssistantPage() {
         </div>
       </div>
 
-      {/* ── Turnstile Verification Modal ─────────── */}
-      {showTurnstile && (
+      {/* ── 人机验证弹窗 ──────────────────────── */}
+      {showCaptcha && (
         <div style={{
           position: 'fixed',
           inset: 0,
@@ -1093,7 +1094,7 @@ export default function AIAssistantPage() {
           {/* Backdrop */}
           <div
             onClick={() => {
-              setShowTurnstile(false)
+              setShowCaptcha(false)
               pendingTextRef.current = ''
             }}
             style={{
@@ -1114,8 +1115,8 @@ export default function AIAssistantPage() {
             flexDirection: 'column',
             alignItems: 'center',
             gap: '18px',
-            minWidth: '320px',
-            maxWidth: '380px',
+            minWidth: '300px',
+            maxWidth: '360px',
           }}>
             <div style={{
               width: '48px',
@@ -1136,13 +1137,83 @@ export default function AIAssistantPage() {
                 人机验证
               </div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                为保证服务质量，请完成验证后继续提问
+                为保证服务质量，请完成下方验证
               </div>
             </div>
-            <div ref={turnstileRef} style={{ minHeight: '65px' }} />
+            {/* Math question */}
+            <div style={{
+              fontSize: '28px',
+              fontWeight: 700,
+              color: 'var(--earth-dark)',
+              fontFamily: 'monospace',
+              letterSpacing: '0.08em',
+              background: 'rgba(90,114,71,0.05)',
+              padding: '10px 28px',
+              borderRadius: '12px',
+            }}>
+              {captchaData.question}
+            </div>
+            {/* Input row */}
+            <div style={{
+              display: 'flex',
+              gap: '10px',
+              alignItems: 'center',
+            }}>
+              <input
+                ref={captchaInputRef}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={captchaInput}
+                onChange={(e) => setCaptchaInput(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCaptchaSubmit()
+                }}
+                placeholder="输入答案"
+                style={{
+                  width: '120px',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '2px solid',
+                  borderColor: captchaError ? '#C75050' : 'rgba(0,0,0,0.12)',
+                  fontSize: '18px',
+                  fontFamily: 'monospace',
+                  textAlign: 'center',
+                  outline: 'none',
+                  transition: 'border-color 0.2s, transform 0.2s',
+                  transform: captchaError ? 'translateX(-4px)' : 'none',
+                  animation: captchaError ? 'captchaShake 0.5s ease' : 'none',
+                }}
+                onFocus={e => e.currentTarget.style.borderColor = '#5A7247'}
+                onBlur={e => e.currentTarget.style.borderColor = captchaError ? '#C75050' : 'rgba(0,0,0,0.12)'}
+              />
+              <button
+                onClick={handleCaptchaSubmit}
+                disabled={!captchaInput}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: captchaInput ? 'linear-gradient(135deg, #5A7247 0%, #3D4A2E 100%)' : 'rgba(0,0,0,0.08)',
+                  color: captchaInput ? 'white' : 'rgba(0,0,0,0.25)',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  cursor: captchaInput ? 'pointer' : 'default',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.2s',
+                }}
+              >
+                确认
+              </button>
+            </div>
+            {captchaError && (
+              <div style={{ color: '#C75050', fontSize: '12px', fontWeight: 500 }}>
+                答案不对，再试一次
+              </div>
+            )}
             <button
               onClick={() => {
-                setShowTurnstile(false)
+                setShowCaptcha(false)
                 pendingTextRef.current = ''
               }}
               style={{

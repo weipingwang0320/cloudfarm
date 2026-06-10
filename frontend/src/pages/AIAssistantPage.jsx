@@ -5,6 +5,11 @@ const API_BASE = '/api'
 const HISTORY_KEY = 'cloud_farm_ai_history'
 const MAX_HISTORY = 50
 
+// ── Cloudflare Turnstile ──
+// 上线前请到 https://dash.cloudflare.com/ → Turnstile → 添加站点
+// 免费获取你自己的 sitekey，替换下面这行即可
+const TURNSTILE_SITEKEY = '1x00000000000000000000AA' // ← 测试密钥（始终通过），上线时改这里
+
 const formatTime = () => {
   const now = new Date()
   return now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -323,6 +328,17 @@ export default function AIAssistantPage() {
   const scrollRef = useRef(null)
   const textareaRef = useRef(null)
   const [copiedIdx, setCopiedIdx] = useState(null)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
+
+  // ── Turnstile verification ──
+  const [turnstileVerified, setTurnstileVerified] = useState(false)
+  const [showTurnstile, setShowTurnstile] = useState(false)
+  const pendingTextRef = useRef('')
+  const turnstileRef = useRef(null)
+  const turnstileWidgetId = useRef(null)
+
+  // Count messages sent by user (exclude initial welcome bot message)
+  const userMsgCount = messages.filter(m => m.role === 'user').length
 
   // Auto-scroll
   const scrollToBottom = useCallback(() => {
@@ -334,7 +350,25 @@ export default function AIAssistantPage() {
     }
   }, [])
 
-  useEffect(() => { scrollToBottom() }, [messages, loading, scrollToBottom])
+  // Track whether user has scrolled away from bottom
+  const handleMessagesScroll = useCallback(() => {
+    if (scrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+      // Show button if scrolled more than 200px from bottom
+      setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 200)
+    }
+  }, [])
+
+  // Auto-scroll when new messages arrive (only if already near bottom)
+  useEffect(() => {
+    if (scrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 200
+      if (isNearBottom) {
+        scrollToBottom()
+      }
+    }
+  }, [messages, loading, scrollToBottom])
 
   // Persist history
   useEffect(() => {
@@ -356,8 +390,57 @@ export default function AIAssistantPage() {
     setTimeout(() => textareaRef.current?.focus(), 300)
   }, [])
 
-  const sendMessage = async (text) => {
+  // ── Turnstile: render widget when modal opens, clean up ──
+  useEffect(() => {
+    if (!showTurnstile) return
+
+    // Give the DOM time to render the container before initializing widget
+    const timer = setTimeout(() => {
+      if (turnstileRef.current && window.turnstile) {
+        if (turnstileWidgetId.current !== null) {
+          window.turnstile.remove(turnstileWidgetId.current)
+        }
+        turnstileWidgetId.current = window.turnstile.render(turnstileRef.current, {
+          sitekey: TURNSTILE_SITEKEY,
+          theme: 'light',
+          language: 'zh-cn',
+          callback: (token) => {
+            setTurnstileVerified(true)
+            setShowTurnstile(false)
+            const pending = pendingTextRef.current
+            pendingTextRef.current = ''
+            if (pending) {
+              sendMessage(pending, true)
+            }
+          },
+          'expired-callback': () => {
+            // Token expired, reset widget
+            if (turnstileWidgetId.current !== null) {
+              window.turnstile.reset(turnstileWidgetId.current)
+            }
+          },
+        })
+      }
+    }, 200)
+
+    return () => {
+      clearTimeout(timer)
+      if (turnstileWidgetId.current !== null && window.turnstile) {
+        window.turnstile.remove(turnstileWidgetId.current)
+        turnstileWidgetId.current = null
+      }
+    }
+  }, [showTurnstile])
+
+  const sendMessage = async (text, skipVerification = false) => {
     if (!text.trim() || loading) return
+
+    // ── Turnstile check: trigger on second question onwards ──
+    if (!skipVerification && !turnstileVerified && userMsgCount >= 1) {
+      pendingTextRef.current = text
+      setShowTurnstile(true)
+      return
+    }
 
     const userMsg = { role: 'user', text, time: formatTime() }
     setMessages((prev) => [...prev, userMsg])
@@ -430,11 +513,11 @@ export default function AIAssistantPage() {
 
   return (
     <div style={{
-      minHeight: 'calc(100vh - 72px)',
+      height: 'calc(100vh - 72px)',
+      overflow: 'hidden',
       background: '#FAF8F5',
       display: 'flex',
       flexDirection: 'column',
-      position: 'relative',
     }}>
       {/* Animations */}
       <style>{`
@@ -467,12 +550,8 @@ export default function AIAssistantPage() {
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
-        background: 'rgba(250,248,245,0.85)',
-        backdropFilter: 'blur(16px)',
+        background: '#FAF8F5',
         borderBottom: '1px solid rgba(0,0,0,0.05)',
-        position: 'sticky',
-        top: '72px',
-        zIndex: 10,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <BotAvatar size={38} />
@@ -557,8 +636,10 @@ export default function AIAssistantPage() {
       <div
         ref={scrollRef}
         className="chat-scroll"
+        onScroll={handleMessagesScroll}
         style={{
           flex: 1,
+          minHeight: 0,
           overflow: 'auto',
           padding: '28px 20px',
           display: 'flex',
@@ -567,6 +648,7 @@ export default function AIAssistantPage() {
           maxWidth: '780px',
           width: '100%',
           margin: '0 auto',
+          position: 'relative',
         }}
       >
         {/* Welcome / Suggestions */}
@@ -811,6 +893,55 @@ export default function AIAssistantPage() {
         )}
 
         <div style={{ height: '24px', flexShrink: 0 }} />
+
+        {/* Floating scroll-to-bottom button — sticky inside scroll area */}
+        {showScrollBtn && (
+          <div style={{
+            position: 'sticky',
+            bottom: '12px',
+            alignSelf: 'center',
+            width: 0,
+            height: 0,
+            zIndex: 5,
+          }}>
+            <button
+              onClick={() => scrollToBottom()}
+              style={{
+                position: 'absolute',
+                bottom: '0',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                border: '1.5px solid rgba(0,0,0,0.08)',
+                background: 'white',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
+                animation: 'msgSlideUp 0.3s ease both',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateX(-50%) scale(1.08)'
+                e.currentTarget.style.boxShadow = '0 6px 24px rgba(90,114,71,0.2)'
+                e.currentTarget.style.borderColor = '#5A7247'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateX(-50%) scale(1)'
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)'
+                e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'
+              }}
+              aria-label="滚动到底部"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5A7247" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Input Area ────────────────────────────── */}
@@ -947,6 +1078,98 @@ export default function AIAssistantPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Turnstile Verification Modal ─────────── */}
+      {showTurnstile && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'msgSlideUp 0.25s ease both',
+        }}>
+          {/* Backdrop */}
+          <div
+            onClick={() => {
+              setShowTurnstile(false)
+              pendingTextRef.current = ''
+            }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.35)',
+              backdropFilter: 'blur(4px)',
+            }}
+          />
+          {/* Card */}
+          <div style={{
+            position: 'relative',
+            background: 'white',
+            borderRadius: '20px',
+            padding: '32px 28px 24px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '18px',
+            minWidth: '320px',
+            maxWidth: '380px',
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, #3D4A2E 0%, #5A7247 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--earth-dark)', marginBottom: '4px' }}>
+                人机验证
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                为保证服务质量，请完成验证后继续提问
+              </div>
+            </div>
+            <div ref={turnstileRef} style={{ minHeight: '65px' }} />
+            <button
+              onClick={() => {
+                setShowTurnstile(false)
+                pendingTextRef.current = ''
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                fontSize: '12px',
+                fontFamily: 'inherit',
+                padding: '4px 12px',
+                borderRadius: '6px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = '#C75050'
+                e.currentTarget.style.background = 'rgba(199,80,80,0.05)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = 'var(--text-muted)'
+                e.currentTarget.style.background = 'none'
+              }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

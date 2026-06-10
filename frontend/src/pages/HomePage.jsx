@@ -4,14 +4,14 @@ import axios from 'axios'
 
 const API_BASE = '/api'
 
-const HERO_IMAGE = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1920&q=80'
-const WEATHER_IMAGE = 'https://images.unsplash.com/photo-1504608524841-42fe6f032b4b?w=800&q=80'
-const SENSOR_IMAGE = 'https://images.unsplash.com/photo-1581092335397-9583eb92d232?w=800&q=80'
-const CHAT_IMAGE = 'https://images.unsplash.com/photo-1530023367847-a683933f4172?w=800&q=80'
-const CALENDAR_IMAGE = 'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?w=800&q=80'
-const FERTILIZER_IMAGE = 'https://images.unsplash.com/photo-1563514227147-6d2ff665a6a0?w=800&q=80'
-const DISEASE_IMAGE = 'https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?w=800&q=80'
-const ASSISTANT_IMAGE = 'https://images.unsplash.com/photo-1530023367847-a683933f4172?w=800&q=80'
+const HERO_IMAGE = '/images/hero.webp'
+const WEATHER_IMAGE = '/images/weather.webp'
+const SENSOR_IMAGE = '/images/sensor.webp'
+const CHAT_IMAGE = '/images/chat.webp'
+const CALENDAR_IMAGE = '/images/calendar.webp'
+const FERTILIZER_IMAGE = '/images/fertilizer.webp'
+const DISEASE_IMAGE = '/images/disease.webp'
+const ASSISTANT_IMAGE = '/images/chat.webp'
 
 const features = [
   { image: WEATHER_IMAGE, title: '实时气象监测', desc: '接入 Open-Meteo 全球气象数据，实时获取温度、降水、日照、湿度等精准信息', icon: 'weather', link: '/farm' },
@@ -108,6 +108,18 @@ function FeatureCard({ item, index }) {
   const [ref, visible] = useScrollReveal(0.1)
   const [tilt, setTilt] = useState({ x: 0, y: 0 })
   const [glow, setGlow] = useState(false)
+  const [imgReady, setImgReady] = useState(false)
+  const trackerRef = useRef(null)
+
+  // Detect if image is already cached (e.g. from preload) before onLoad fires
+  useEffect(() => {
+    const el = trackerRef.current
+    if (el && el.complete && el.naturalWidth > 0) {
+      setImgReady(true)
+    }
+  }, [])
+
+  const handleImageLoaded = () => setImgReady(true)
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -143,8 +155,33 @@ function FeatureCard({ item, index }) {
           : '0 4px 20px rgba(93,78,55,0.08)',
       }}
     >
-      {/* Image */}
-      <div style={{ height: '200px', backgroundImage: `url(${item.image})`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
+      {/* Image area — gradient placeholder always visible, real image fades in when loaded */}
+      <div style={{
+        height: '200px',
+        position: 'relative',
+        background: 'linear-gradient(135deg, #D5CFBE 0%, #C8C0AC 50%, #B8B09C 100%)',
+      }}>
+        {/* Hidden tracker img — fires onLoad when image download completes or is cached */}
+        {visible && (
+          <img
+            ref={trackerRef}
+            src={item.image}
+            alt=""
+            onLoad={handleImageLoaded}
+            onError={() => setImgReady(true)} // fallback: show placeholder on error too
+            style={{ display: 'none' }}
+          />
+        )}
+        {/* Real visible image — fades in over placeholder */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: imgReady ? `url(${item.image})` : 'none',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: imgReady ? 1 : 0,
+          transition: 'opacity 0.5s ease',
+        }} />
+        {/* Overlay gradient + icon (always visible) */}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 40%, rgba(35,30,20,0.75) 100%)' }} />
         <div style={{ position: 'absolute', bottom: '14px', left: '18px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
           {iconSvgs[item.icon] ? iconSvgs[item.icon]('#fff') : iconSvgs.weather('#fff')}
@@ -205,6 +242,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const [heroMouse, setHeroMouse] = useState({ x: 0.5, y: 0.5 })
   const [scrollY, setScrollY] = useState(0)
+  const [heroLoaded, setHeroLoaded] = useState(false)
   const heroRef = useRef(null)
 
   useEffect(() => {
@@ -216,6 +254,14 @@ export default function HomePage() {
       setLoading(false)
     }
     fetchData()
+
+    // Aggressively preload all card images on page mount
+    // so they're cached by the time user scrolls to the features section
+    const cardUrls = features.map(f => f.image)
+    cardUrls.forEach(url => {
+      const img = new Image()
+      img.src = url
+    })
   }, [])
 
   useEffect(() => {
@@ -301,9 +347,13 @@ export default function HomePage() {
           position: 'absolute', inset: 0,
           backgroundImage: `url(${HERO_IMAGE})`,
           backgroundSize: 'cover', backgroundPosition: 'center',
+          opacity: heroLoaded ? 1 : 0,
+          transition: 'opacity 0.8s ease, transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           transform: `scale(1.15) translate(${(heroMouse.x - 0.5) * -16}px, ${(heroMouse.y - 0.5) * -16}px)`,
-          transition: 'transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }} />
+        {/* Hidden img to track hero load */}
+        <img src={HERO_IMAGE} alt="" onLoad={() => setHeroLoaded(true)}
+          style={{ display: 'none' }} />
         {/* Grain overlay */}
         <div style={{
           position: 'absolute', inset: 0, zIndex: 1,

@@ -1,6 +1,10 @@
 # Claude Code
 .claude/
 
+# Tool artifacts
+.codegraph/
+.reasonix/
+
 # Python
 backend/venv/
 backend/__pycache__/

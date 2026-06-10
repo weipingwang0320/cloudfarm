@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import axios from 'axios'
 
 const API_BASE = '/api'
@@ -11,14 +11,292 @@ const formatTime = () => {
 }
 
 const SUGGESTIONS = [
-  { icon: '💧', text: '什么时候该浇水？', label: '灌溉咨询' },
-  { icon: '🍂', text: '叶子发黄怎么办？', label: '病害诊断' },
-  { icon: '🌱', text: '如何科学施肥？', label: '施肥指导' },
-  { icon: '🐛', text: '常见虫害如何防治？', label: '虫害防治' },
-  { icon: '🌤', text: '最近天气适合播种吗？', label: '农时规划' },
-  { icon: '🌾', text: '水稻分蘖期怎么管理？', label: '阶段管理' },
+  { icon: '💧', label: '灌溉咨询', text: '什么时候该浇水？' },
+  { icon: '🍂', label: '病害诊断', text: '叶子发黄怎么办？' },
+  { icon: '🌱', label: '施肥指导', text: '如何科学施肥？' },
+  { icon: '🐛', label: '虫害防治', text: '常见虫害如何防治？' },
+  { icon: '🌤', label: '农时规划', text: '最近天气适合播种吗？' },
+  { icon: '🌾', label: '阶段管理', text: '水稻分蘖期怎么管理？' },
 ]
 
+// ── Markdown Renderer ──────────────────────────────────
+const Markdown = ({ text }) => {
+  if (!text) return null
+
+  const renderInline = (str) => {
+    const parts = []
+    let remaining = str
+    let key = 0
+
+    // Process inline elements
+    while (remaining.length > 0) {
+      // Inline code
+      const codeMatch = remaining.match(/`([^`]+)`/)
+      // Bold
+      const boldMatch = remaining.match(/\*\*(.+?)\*\*/)
+      // Italic
+      const italicMatch = remaining.match(/(?<!\*)\*([^*]+)\*(?!\*)/)
+
+      const matches = [
+        codeMatch && { idx: codeMatch.index, len: codeMatch[0].length, type: 'code', content: codeMatch[1] },
+        boldMatch && { idx: boldMatch.index, len: boldMatch[0].length, type: 'bold', content: boldMatch[1] },
+        italicMatch && { idx: italicMatch.index, len: italicMatch[0].length, type: 'italic', content: italicMatch[1] },
+      ].filter(Boolean).sort((a, b) => a.idx - b.idx)
+
+      if (matches.length === 0) {
+        parts.push(<span key={key++}>{remaining}</span>)
+        break
+      }
+
+      const m = matches[0]
+      if (m.idx > 0) {
+        parts.push(<span key={key++}>{remaining.slice(0, m.idx)}</span>)
+      }
+
+      if (m.type === 'code') {
+        parts.push(
+          <code key={key++} style={{
+            background: 'rgba(0,0,0,0.06)',
+            padding: '1px 6px',
+            borderRadius: '4px',
+            fontSize: '0.9em',
+            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+            color: '#C75050',
+          }}>{m.content}</code>
+        )
+      } else if (m.type === 'bold') {
+        parts.push(<strong key={key++} style={{ color: 'var(--earth-dark)' }}>{m.content}</strong>)
+      } else if (m.type === 'italic') {
+        parts.push(<em key={key++}>{m.content}</em>)
+      }
+
+      remaining = remaining.slice(m.idx + m.len)
+    }
+
+    return parts
+  }
+
+  const lines = text.split('\n')
+  const result = []
+  let i = 0
+  let codeBlock = null
+  let codeLines = []
+
+  const flushCodeBlock = () => {
+    if (codeBlock) {
+      result.push(
+        <div key={`code-${codeBlock.key}`} style={{
+          background: '#1E1E1E',
+          borderRadius: '10px',
+          margin: '12px 0',
+          overflow: 'hidden',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 14px',
+            background: '#2A2A2A',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#FF5F56' }} />
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#FFBD2E' }} />
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#27C93F' }} />
+            </div>
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
+              {codeBlock.lang || 'code'}
+            </span>
+            <button
+              onClick={() => navigator.clipboard.writeText(codeLines.join('\n')).catch(() => {})}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255,255,255,0.4)',
+                cursor: 'pointer',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'white'; e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.background = 'none' }}
+            >
+              复制
+            </button>
+          </div>
+          <pre style={{
+            margin: 0,
+            padding: '14px 16px',
+            overflowX: 'auto',
+            fontSize: '13px',
+            lineHeight: '1.65',
+            color: '#E0E0E0',
+            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+          }}><code>{codeLines.join('\n')}</code></pre>
+        </div>
+      )
+      codeBlock = null
+      codeLines = []
+    }
+  }
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Code block start/end
+    if (/^```/.test(line)) {
+      if (codeBlock) {
+        flushCodeBlock()
+      } else {
+        const lang = line.replace(/^```/, '').trim()
+        codeBlock = { key: i, lang: lang || 'plain' }
+      }
+      i++
+      continue
+    }
+
+    if (codeBlock) {
+      codeLines.push(line)
+      i++
+      continue
+    }
+
+    // Heading
+    const headingMatch = line.match(/^(#{1,3})\s+(.+)/)
+    if (headingMatch) {
+      flushCodeBlock()
+      const level = headingMatch[1].length
+      const sizes = { 1: 22, 2: 17, 3: 15 }
+      const margins = { 1: '20px 0 8px', 2: '16px 0 6px', 3: '12px 0 4px' }
+      result.push(
+        <div key={i} style={{
+          fontSize: `${sizes[level]}px`,
+          fontWeight: 700,
+          margin: margins[level],
+          color: 'var(--earth-dark)',
+          lineHeight: 1.4,
+        }}>
+          {renderInline(headingMatch[2])}
+        </div>
+      )
+      i++
+      continue
+    }
+
+    // Numbered list with bold prefix
+    const numBoldMatch = line.match(/^(\d+)\.\s\*\*(.+?)\*\*(.*)/)
+    if (numBoldMatch) {
+      flushCodeBlock()
+      result.push(
+        <div key={i} style={{ paddingLeft: '4px', marginBottom: '6px', lineHeight: 1.7 }}>
+          <span style={{
+            display: 'inline-block',
+            minWidth: '22px',
+            height: '22px',
+            lineHeight: '22px',
+            borderRadius: '11px',
+            background: 'rgba(90,114,71,0.1)',
+            color: '#5A7247',
+            fontSize: '12px',
+            fontWeight: 700,
+            textAlign: 'center',
+            marginRight: '8px',
+          }}>{numBoldMatch[1]}</span>
+          <strong style={{ color: 'var(--earth-dark)' }}>{numBoldMatch[2]}</strong>
+          <span>{numBoldMatch[3]}</span>
+        </div>
+      )
+      i++
+      continue
+    }
+
+    // Bullet list
+    if (/^-\s/.test(line)) {
+      flushCodeBlock()
+      result.push(
+        <div key={i} style={{ paddingLeft: '8px', marginBottom: '4px', lineHeight: 1.7, display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+          <span style={{ color: '#5A7247', flexShrink: 0, marginTop: '1px' }}>•</span>
+          <span>{renderInline(line.replace(/^-\s/, ''))}</span>
+        </div>
+      )
+      i++
+      continue
+    }
+
+    // Empty line
+    if (line.trim() === '') {
+      flushCodeBlock()
+      result.push(<div key={i} style={{ height: '8px' }} />)
+      i++
+      continue
+    }
+
+    // Regular text
+    flushCodeBlock()
+    result.push(
+      <div key={i} style={{ lineHeight: 1.75 }}>
+        {renderInline(line)}
+      </div>
+    )
+    i++
+  }
+
+  flushCodeBlock()
+
+  return <>{result}</>
+}
+
+// ── Avatar Icon ────────────────────────────────────────
+const BotAvatar = ({ size = 32 }) => (
+  <div style={{
+    width: `${size}px`,
+    height: `${size}px`,
+    borderRadius: '10px',
+    background: 'linear-gradient(135deg, #3D4A2E 0%, #5A7247 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    boxShadow: '0 2px 8px rgba(90,114,71,0.2)',
+    position: 'relative',
+  }}>
+    <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22c4-4 8-7.582 8-12a8 8 0 1 0-16 0c0 4.418 4 8 8 12Z"/>
+      <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+    </svg>
+    <div style={{
+      position: 'absolute',
+      bottom: '-1px',
+      right: '-1px',
+      width: `${size * 0.28}px`,
+      height: `${size * 0.28}px`,
+      background: '#4CAF50',
+      borderRadius: '50%',
+      border: '2px solid white',
+    }} />
+  </div>
+)
+
+const UserAvatar = ({ size = 32 }) => (
+  <div style={{
+    width: `${size}px`,
+    height: `${size}px`,
+    borderRadius: '10px',
+    background: 'linear-gradient(135deg, #DAA520 0%, #E8A87C 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    color: 'white',
+    fontWeight: 700,
+    fontSize: `${size * 0.38}px`,
+    boxShadow: '0 2px 8px rgba(218,165,32,0.2)',
+  }}>我</div>
+)
+
+// ── Main Component ─────────────────────────────────────
 export default function AIAssistantPage() {
   const [messages, setMessages] = useState(() => {
     try {
@@ -28,7 +306,7 @@ export default function AIAssistantPage() {
     return [
       {
         role: 'bot',
-        text: '你好！我是 **云上田园 AI 助手**，基于智谱 GLM-4.5-Air 大模型驱动。\n\n我可以帮你：\n- 🌱 解答种植技术问题\n- 🦠 诊断作物病虫害\n- 🌤 提供农事建议\n- 🧪 指导科学施肥\n- 📅 规划农事日历\n\n随时向我提问吧！',
+        text: '你好！我是 **云上田园 AI 助手**，基于智谱 GLM-4.5-Air 大模型驱动。\n\n我可以帮你：\n- 解答种植技术问题\n- 诊断作物病虫害\n- 提供农事建议\n- 指导科学施肥\n- 规划农事日历\n\n随时向我提问吧！',
         time: formatTime(),
       },
     ]
@@ -36,21 +314,47 @@ export default function AIAssistantPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [searchEnabled, setSearchEnabled] = useState(false)
-  const [showSuggestions, setShowSuggestions] = useState(true)
+  const [showSuggestions, setShowSuggestions] = useState(() => {
+    try {
+      const saved = localStorage.getItem(HISTORY_KEY)
+      return !saved || JSON.parse(saved).length <= 1
+    } catch { return true }
+  })
   const scrollRef = useRef(null)
-  const inputRef = useRef(null)
+  const textareaRef = useRef(null)
+  const [copiedIdx, setCopiedIdx] = useState(null)
 
-  useEffect(() => {
+  // Auto-scroll
+  const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
     }
-  }, [messages])
+  }, [])
 
+  useEffect(() => { scrollToBottom() }, [messages, loading, scrollToBottom])
+
+  // Persist history
   useEffect(() => {
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-MAX_HISTORY)))
     } catch {}
   }, [messages])
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 160) + 'px'
+    }
+  }, [input])
+
+  // Focus textarea on mount
+  useEffect(() => {
+    setTimeout(() => textareaRef.current?.focus(), 300)
+  }, [])
 
   const sendMessage = async (text) => {
     if (!text.trim() || loading) return
@@ -62,9 +366,19 @@ export default function AIAssistantPage() {
     setShowSuggestions(false)
 
     try {
+      // Collect last 3 conversation turns (up to 6 messages) for context
+      const recentHistory = [];
+      const recent = messages.slice(-6); // last 6 messages = 3 user+bot pairs
+      for (const msg of recent) {
+        if (msg.text && msg.text.length > 0) {
+          recentHistory.push({ role: msg.role, text: msg.text });
+        }
+      }
+
       const res = await axios.post(`${API_BASE}/diary/ask`, {
         question: text,
         enable_search: searchEnabled,
+        history: recentHistory,
       })
 
       if (res.data.success) {
@@ -86,10 +400,14 @@ export default function AIAssistantPage() {
     }
 
     setLoading(false)
+    setTimeout(() => textareaRef.current?.focus(), 100)
   }
 
-  const copyMessage = (text) => {
-    navigator.clipboard.writeText(text).catch(() => {})
+  const copyMessage = (text, idx) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIdx(idx)
+      setTimeout(() => setCopiedIdx(null), 2000)
+    }).catch(() => {})
   }
 
   const clearHistory = () => {
@@ -103,141 +421,86 @@ export default function AIAssistantPage() {
     localStorage.removeItem(HISTORY_KEY)
   }
 
-  const renderText = (text) => {
-    const lines = text.split('\n')
-    return lines.map((line, i) => {
-      // Bold markers **...**
-      const boldRegex = /\*\*(.+?)\*\*/g
-      const parts = []
-      let lastIdx = 0
-      let match
-      while ((match = boldRegex.exec(line)) !== null) {
-        if (match.index > lastIdx) parts.push(line.slice(lastIdx, match.index))
-        parts.push(
-          <strong key={match.index} style={{ color: 'var(--earth-dark)' }}>
-            {match[1]}
-          </strong>
-        )
-        lastIdx = match.index + match[0].length
-      }
-      if (lastIdx < line.length) parts.push(line.slice(lastIdx))
-
-      if (/^#{1,3}\s/.test(line)) {
-        const level = line.match(/^(#{1,3})\s/)[1].length
-        const content = line.replace(/^#{1,3}\s/, '')
-        const sizes = { 1: '18px', 2: '15px', 3: '14px' }
-        return (
-          <div key={i} style={{ fontWeight: '700', fontSize: sizes[level], marginTop: level === 1 ? '14px' : '8px', marginBottom: '4px', color: 'var(--earth-dark)' }}>
-            {content}
-          </div>
-        )
-      }
-      if (/^\d+\.\s\*\*/.test(line)) {
-        const match = line.match(/^\d+\.\s\*\*(.+?)\*\*(.*)/)
-        if (match) {
-          return (
-            <div key={i} style={{ marginBottom: '4px', paddingLeft: '4px' }}>
-              <span style={{ fontWeight: '600', color: '#5A7247' }}>{match[1]}</span>
-              {match[2]}
-            </div>
-          )
-        }
-      }
-      if (/^-\s/.test(line)) {
-        return <div key={i} style={{ paddingLeft: '12px', marginBottom: '3px', opacity: 0.92 }}>• {line.replace(/^-\s/, '')}</div>
-      }
-      if (line.trim() === '') return <div key={i} style={{ height: '6px' }} />
-      return <span key={i}>{parts}{i < lines.length - 1 ? <br /> : null}</span>
-    })
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage(input)
+    }
   }
 
   return (
-    <div
-      style={{
-        minHeight: 'calc(100vh - 72px)',
-        background: 'linear-gradient(180deg, #F7F5F0 0%, #EDEBE3 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-      onClick={() => inputRef.current?.focus()}
-    >
+    <div style={{
+      minHeight: 'calc(100vh - 72px)',
+      background: '#FAF8F5',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+    }}>
+      {/* Animations */}
       <style>{`
-        @keyframes msgSlideIn {
-          from { opacity: 0; transform: translateY(8px); }
+        @keyframes msgSlideUp {
+          from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes dotBounce {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+        @keyframes thinkingDot {
+          0%, 80%, 100% { transform: scale(0.5); opacity: 0.3; }
           40% { transform: scale(1); opacity: 1; }
         }
-        @keyframes glowPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(90,114,71,0.2); }
-          50% { box-shadow: 0 0 0 8px rgba(90,114,71,0.06); }
+        @keyframes pulseBorder {
+          0%, 100% { border-color: rgba(90,114,71,0.15); box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+          50% { border-color: rgba(90,114,71,0.35); box-shadow: 0 2px 20px rgba(90,114,71,0.08); }
         }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .chat-scroll::-webkit-scrollbar { width: 5px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.18); }
       `}</style>
 
-      {/* Header */}
+      {/* ── Header ────────────────────────────────── */}
       <div style={{
-        background: 'linear-gradient(135deg, #3D4A2E 0%, #4A5E35 40%, #5A7247 100%)',
-        padding: '16px 32px',
+        padding: '14px 28px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
+        background: 'rgba(250,248,245,0.85)',
+        backdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(0,0,0,0.05)',
         position: 'sticky',
         top: '72px',
         zIndex: 10,
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '14px',
-            background: 'rgba(255,255,255,0.14)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative',
-          }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22c4-4 8-7.582 8-12a8 8 0 1 0-16 0c0 4.418 4 8 8 12Z"/>
-              <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
-            </svg>
-            <div style={{
-              position: 'absolute',
-              bottom: '-2px',
-              right: '-2px',
-              width: '12px',
-              height: '12px',
-              background: '#4CAF50',
-              borderRadius: '50%',
-              border: '2px solid #4A5E35',
-            }} />
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <BotAvatar size={38} />
           <div>
-            <div style={{ color: 'white', fontWeight: 700, fontSize: '17px', letterSpacing: '0.02em' }}>
-              AI 农场助手
+            <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--earth-dark)', letterSpacing: '0.02em' }}>
+              云上田园 AI 助手
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.65)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '6px', height: '6px', background: '#4CAF50', borderRadius: '50%', display: 'inline-block' }} />
-              在线 · 智谱 GLM-4.5-Air · {searchEnabled ? '联网搜索已开启' : '基础问答模式'}
+              智谱 GLM-4.5-Air{searchEnabled ? ' · 联网搜索' : ''}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Search toggle */}
           <button
             onClick={() => setSearchEnabled(!searchEnabled)}
             title={searchEnabled ? '关闭联网搜索' : '开启联网搜索'}
             style={{
-              padding: '8px 14px',
+              padding: '7px 14px',
               borderRadius: '10px',
-              border: 'none',
-              background: searchEnabled ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)',
-              color: 'white',
-              fontSize: '12px',
-              fontWeight: searchEnabled ? 700 : 400,
+              border: '1.5px solid',
+              borderColor: searchEnabled ? '#5A7247' : 'rgba(0,0,0,0.1)',
+              background: searchEnabled ? 'rgba(90,114,71,0.06)' : 'transparent',
+              color: searchEnabled ? '#5A7247' : 'var(--text-secondary)',
+              fontSize: '13px',
+              fontWeight: searchEnabled ? 600 : 400,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -250,17 +513,20 @@ export default function AIAssistantPage() {
               <circle cx="11" cy="11" r="8"/>
               <path d="M21 21l-4.35-4.35"/>
             </svg>
-            {searchEnabled ? '搜索中' : '联网'}
+            {searchEnabled ? '搜索中' : '联网搜索'}
           </button>
+
+          {/* Clear */}
           <button
             onClick={clearHistory}
+            title="清空对话"
             style={{
-              padding: '8px 14px',
+              padding: '7px 14px',
               borderRadius: '10px',
-              border: 'none',
-              background: 'rgba(255,255,255,0.08)',
-              color: 'rgba(255,255,255,0.8)',
-              fontSize: '12px',
+              border: '1.5px solid rgba(0,0,0,0.1)',
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: '13px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -268,41 +534,78 @@ export default function AIAssistantPage() {
               transition: 'all 0.2s ease',
               fontFamily: 'inherit',
             }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#C75050'
+              e.currentTarget.style.color = '#C75050'
+              e.currentTarget.style.background = 'rgba(199,80,80,0.04)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'rgba(0,0,0,0.1)'
+              e.currentTarget.style.color = 'var(--text-secondary)'
+              e.currentTarget.style.background = 'transparent'
+            }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 6h18M8 6V4h8v2M10 11v6M14 11v6M5 6l1 14h12l1-14"/>
             </svg>
-            清空
+            清空对话
           </button>
         </div>
       </div>
 
-      {/* Messages */}
+      {/* ── Messages ──────────────────────────────── */}
       <div
         ref={scrollRef}
+        className="chat-scroll"
         style={{
           flex: 1,
           overflow: 'auto',
-          padding: '32px 32px 20px',
+          padding: '28px 20px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '24px',
-          maxWidth: '860px',
+          gap: '4px',
+          maxWidth: '780px',
           width: '100%',
           margin: '0 auto',
         }}
       >
-        {/* Suggestions */}
+        {/* Welcome / Suggestions */}
         {showSuggestions && messages.length <= 1 && (
-          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{ fontSize: '14px', color: '#A69278', marginBottom: '16px', fontWeight: 500 }}>
-              试试这些问题
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 0 20px',
+            animation: 'msgSlideUp 0.5s ease both',
+          }}>
+            <div style={{ marginBottom: '28px' }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '18px',
+                background: 'linear-gradient(135deg, #3D4A2E 0%, #5A7247 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+                boxShadow: '0 8px 32px rgba(90,114,71,0.2)',
+              }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22c4-4 8-7.582 8-12a8 8 0 1 0-16 0c0 4.418 4 8 8 12Z"/>
+                  <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
+                </svg>
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--earth-dark)', fontFamily: 'var(--font-display)' }}>
+                今天需要什么帮助？
+              </div>
+              <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                我精通种植技术、病虫害防治、施肥指导等农事问题
+              </div>
             </div>
+
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
               gap: '10px',
-              maxWidth: '650px',
+              maxWidth: '620px',
               margin: '0 auto',
             }}>
               {SUGGESTIONS.map((s, i) => (
@@ -311,35 +614,36 @@ export default function AIAssistantPage() {
                   onClick={() => sendMessage(s.text)}
                   disabled={loading}
                   style={{
-                    padding: '14px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '13px 16px',
                     borderRadius: '14px',
-                    border: '1px solid #E0DDD2',
+                    border: '1.5px solid rgba(0,0,0,0.06)',
                     background: 'white',
                     cursor: 'pointer',
                     textAlign: 'left',
                     fontSize: '13px',
-                    color: '#5D4E37',
+                    color: 'var(--text-primary)',
                     transition: 'all 0.2s ease',
                     fontFamily: 'inherit',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#5A7247'
-                    e.currentTarget.style.boxShadow = '0 4px 16px rgba(90,114,71,0.1)'
+                    e.currentTarget.style.boxShadow = '0 4px 20px rgba(90,114,71,0.1)'
                     e.currentTarget.style.transform = 'translateY(-2px)'
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#E0DDD2'
-                    e.currentTarget.style.boxShadow = 'none'
+                    e.currentTarget.style.borderColor = 'rgba(0,0,0,0.06)'
+                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.03)'
                     e.currentTarget.style.transform = 'none'
                   }}
                 >
                   <span style={{ fontSize: '22px', flexShrink: 0 }}>{s.icon}</span>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '2px' }}>{s.label}</div>
-                    <div style={{ fontSize: '11px', color: '#A69278' }}>{s.text}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.text}</div>
                   </div>
                 </button>
               ))}
@@ -347,245 +651,300 @@ export default function AIAssistantPage() {
           </div>
         )}
 
+        {/* Message list */}
         {messages.map((msg, i) => (
           <div
             key={i}
             style={{
               display: 'flex',
-              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
-              alignItems: 'flex-end',
-              gap: '12px',
-              animation: 'msgSlideIn 0.35s ease both',
-              animationDelay: `${i * 0.05}s`,
+              gap: '14px',
+              padding: '16px 20px',
+              borderRadius: '16px',
+              animation: 'msgSlideUp 0.35s ease both',
+              animationDelay: `${Math.min(i * 0.03, 0.3)}s`,
+              background: msg.role === 'bot' ? 'transparent' : 'rgba(90,114,71,0.03)',
+              marginTop: i > 0 ? '2px' : 0,
             }}
           >
-            {/* Avatar */}
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '12px',
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '16px',
-              boxShadow: msg.role === 'user'
-                ? '0 2px 8px rgba(90,114,71,0.2)'
-                : '0 2px 8px rgba(139,115,85,0.15)',
-              background: msg.role === 'user'
-                ? 'linear-gradient(135deg, #DAA520 0%, #E8A87C 100%)'
-                : 'linear-gradient(135deg, #5A7247 0%, #6B8E23 100%)',
-              color: 'white',
-              fontWeight: 700,
-              fontSize: msg.role === 'user' ? '12px' : '15px',
-            }}>
-              {msg.role === 'user' ? '我' : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22c4-4 8-7.582 8-12a8 8 0 1 0-16 0c0 4.418 4 8 8 12Z"/>
-                  <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
-                </svg>
-              )}
+            <div style={{ flexShrink: 0, marginTop: '2px' }}>
+              {msg.role === 'bot' ? <BotAvatar size={32} /> : <UserAvatar size={32} />}
             </div>
 
-            {/* Bubble */}
-            <div style={{ maxWidth: '72%', minWidth: '60px' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Role label */}
               <div style={{
-                padding: '14px 18px',
-                borderRadius: msg.role === 'user'
-                  ? '18px 18px 6px 18px'
-                  : '18px 18px 18px 6px',
-                background: msg.role === 'user'
-                  ? 'linear-gradient(135deg, #5A7247 0%, #4A5E35 100%)'
-                  : '#FFFFFF',
-                color: msg.role === 'user' ? 'white' : 'var(--text-primary)',
-                fontSize: '14.5px',
-                lineHeight: '1.8',
-                boxShadow: msg.role === 'user'
-                  ? '0 4px 16px rgba(90,114,71,0.25)'
-                  : '0 2px 16px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.03)',
-                position: 'relative',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: msg.role === 'bot' ? '#5A7247' : '#DAA520',
+                marginBottom: '4px',
+                letterSpacing: '0.03em',
               }}>
-                {msg.role === 'bot' ? renderText(msg.text) : msg.text}
+                {msg.role === 'bot' ? 'AI 助手' : '你'}
+              </div>
+
+              {/* Message content */}
+              <div style={{
+                fontSize: '15px',
+                lineHeight: 1.75,
+                color: 'var(--text-primary)',
+                wordBreak: 'break-word',
+              }}>
+                {msg.role === 'bot' ? <Markdown text={msg.text} /> : <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>}
+              </div>
+
+              {/* Actions row */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginTop: '8px',
+              }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {msg.time}
+                </span>
 
                 {msg.role === 'bot' && (
                   <button
-                    onClick={() => copyMessage(msg.text)}
-                    title="复制"
+                    onClick={() => copyMessage(msg.text, i)}
                     style={{
-                      position: 'absolute',
-                      top: '8px',
-                      right: '8px',
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '8px',
+                      background: 'none',
                       border: 'none',
-                      background: 'rgba(0,0,0,0.03)',
                       cursor: 'pointer',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      color: copiedIdx === i ? '#4CAF50' : 'var(--text-muted)',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: 0.3,
-                      transition: 'opacity 0.2s',
+                      gap: '4px',
+                      transition: 'all 0.2s',
+                      fontFamily: 'inherit',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.3')}
+                    onMouseEnter={e => { if (copiedIdx !== i) e.currentTarget.style.color = 'var(--text-secondary)' }}
+                    onMouseLeave={e => { if (copiedIdx !== i) e.currentTarget.style.color = 'var(--text-muted)' }}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
+                    {copiedIdx === i ? (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        已复制
+                      </>
+                    ) : (
+                      <>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2"/>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        复制
+                      </>
+                    )}
                   </button>
                 )}
-              </div>
-
-              <div style={{
-                fontSize: '11px',
-                color: '#B0A89A',
-                marginTop: '5px',
-                textAlign: msg.role === 'user' ? 'right' : 'left',
-                paddingLeft: msg.role === 'bot' ? '6px' : 0,
-                paddingRight: msg.role === 'user' ? '6px' : 0,
-              }}>
-                {msg.time}
               </div>
             </div>
           </div>
         ))}
 
-        {/* Typing indicator */}
+        {/* Loading indicator */}
         {loading && (
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', animation: 'msgSlideIn 0.3s ease both' }}>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #5A7247 0%, #6B8E23 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: '0 2px 8px rgba(139,115,85,0.15)',
-            }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22c4-4 8-7.582 8-12a8 8 0 1 0-16 0c0 4.418 4 8 8 12Z"/>
-                <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>
-              </svg>
+          <div style={{
+            display: 'flex',
+            gap: '14px',
+            padding: '16px 20px',
+            borderRadius: '16px',
+            animation: 'msgSlideUp 0.3s ease both',
+          }}>
+            <div style={{ flexShrink: 0, marginTop: '2px' }}>
+              <BotAvatar size={32} />
             </div>
-            <div style={{
-              padding: '16px 22px',
-              borderRadius: '18px 18px 18px 6px',
-              background: 'white',
-              boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}>
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#5A7247', animation: 'dotBounce 1.4s infinite' }} />
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#5A7247', animation: 'dotBounce 1.4s infinite 0.2s' }} />
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#5A7247', animation: 'dotBounce 1.4s infinite 0.4s' }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#5A7247',
+                marginBottom: '10px',
+                letterSpacing: '0.03em',
+              }}>
+                AI 助手正在思考
+                <span style={{
+                  display: 'inline-block',
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '50%',
+                  background: '#5A7247',
+                  marginLeft: '2px',
+                  animation: 'thinkingDot 1.4s infinite 0.2s',
+                  verticalAlign: 'middle',
+                }} />
+                <span style={{
+                  display: 'inline-block',
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '50%',
+                  background: '#5A7247',
+                  marginLeft: '3px',
+                  animation: 'thinkingDot 1.4s infinite 0.4s',
+                  verticalAlign: 'middle',
+                }} />
+                <span style={{
+                  display: 'inline-block',
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '50%',
+                  background: '#5A7247',
+                  marginLeft: '3px',
+                  animation: 'thinkingDot 1.4s infinite 0.6s',
+                  verticalAlign: 'middle',
+                }} />
+              </div>
+              <div style={{
+                height: '8px',
+                borderRadius: '4px',
+                background: 'linear-gradient(90deg, rgba(90,114,71,0.06) 0%, rgba(90,114,71,0.12) 50%, rgba(90,114,71,0.06) 100%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 2s infinite',
+                width: '60%',
+              }} />
             </div>
           </div>
         )}
 
-        <div style={{ height: '20px', flexShrink: 0 }} />
+        <div style={{ height: '24px', flexShrink: 0 }} />
       </div>
 
-      {/* Input area */}
+      {/* ── Input Area ────────────────────────────── */}
       <div style={{
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, white 40%)',
-        borderTop: '1px solid rgba(0,0,0,0.06)',
-        padding: '16px 32px 24px',
+        padding: '16px 20px 24px',
         flexShrink: 0,
+        background: 'linear-gradient(180deg, rgba(250,248,245,0) 0%, rgba(250,248,245,0.95) 30%, rgba(250,248,245,1) 100%)',
       }}>
         <div style={{
-          maxWidth: '860px',
+          maxWidth: '780px',
           margin: '0 auto',
-          display: 'flex',
-          gap: '10px',
-          alignItems: 'center',
-          background: '#F5F1E8',
-          borderRadius: '18px',
-          padding: '6px',
-          border: '2px solid transparent',
-          transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-        }}
-          onFocusCapture={() => {
-            const el = document.getElementById('ai-input-wrapper')
-            if (el) { el.style.borderColor = '#5A7247'; el.style.boxShadow = '0 0 0 4px rgba(90,114,71,0.08)' }
-          }}
-          onBlurCapture={() => {
-            const el = document.getElementById('ai-input-wrapper')
-            if (el) { el.style.borderColor = 'transparent'; el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)' }
-          }}
-          id="ai-input-wrapper"
-        >
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
-            placeholder={loading ? 'AI 正在思考...' : '输入你的问题，Enter 发送...'}
-            disabled={loading}
-            style={{
-              flex: 1,
-              padding: '14px 18px',
-              border: 'none',
-              borderRadius: '14px',
-              fontSize: '15px',
-              fontFamily: 'inherit',
-              outline: 'none',
-              background: 'transparent',
-              color: '#3d3929',
-              minWidth: 0,
-            }}
-          />
-          <button
-            onClick={() => sendMessage(input)}
-            disabled={loading || !input.trim()}
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '14px',
-              border: 'none',
-              background: loading || !input.trim()
-                ? '#E0DDD2'
-                : 'linear-gradient(135deg, #5A7247 0%, #4A5E35 100%)',
-              color: 'white',
-              cursor: loading || !input.trim() ? 'default' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              transition: 'all 0.2s ease',
-              animation: !loading && input.trim() ? 'glowPulse 2s infinite' : 'none',
-            }}
-            onMouseEnter={(e) => {
-              if (!loading && input.trim()) {
-                e.currentTarget.style.transform = 'scale(1.05)'
-                e.currentTarget.style.boxShadow = '0 4px 20px rgba(90,114,71,0.4)'
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
-        </div>
-
-        <div style={{
-          maxWidth: '860px',
-          margin: '8px auto 0',
-          fontSize: '11px',
-          color: '#B0A89A',
-          textAlign: 'center',
         }}>
-          AI 助手由智谱 GLM-4.5-Air 大模型驱动 · 信息仅供参考
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'flex-end',
+            background: 'white',
+            borderRadius: '18px',
+            padding: '8px',
+            border: '2px solid rgba(90,114,71,0.12)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.02)',
+            transition: 'all 0.25s ease',
+            animation: loading ? 'none' : 'none',
+          }}
+            id="chat-input-wrapper"
+          >
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onFocus={(e) => {
+                const wrapper = document.getElementById('chat-input-wrapper')
+                if (wrapper) {
+                  wrapper.style.borderColor = 'rgba(90,114,71,0.35)'
+                  wrapper.style.boxShadow = '0 4px 28px rgba(90,114,71,0.08), 0 0 0 1px rgba(0,0,0,0.02)'
+                }
+              }}
+              onBlur={(e) => {
+                const wrapper = document.getElementById('chat-input-wrapper')
+                if (wrapper) {
+                  wrapper.style.borderColor = 'rgba(90,114,71,0.12)'
+                  wrapper.style.boxShadow = '0 4px 24px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.02)'
+                }
+              }}
+              placeholder={loading ? 'AI 正在回复...' : '输入你的农事问题...'}
+              disabled={loading}
+              rows={1}
+              style={{
+                flex: 1,
+                padding: '10px 8px 10px 14px',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '15px',
+                fontFamily: 'inherit',
+                outline: 'none',
+                background: 'transparent',
+                color: 'var(--text-primary)',
+                resize: 'none',
+                minWidth: 0,
+                lineHeight: 1.6,
+                alignSelf: 'center',
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+              {/* Shortcut hint */}
+              <span style={{
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                opacity: 0.5,
+                whiteSpace: 'nowrap',
+                display: input ? 'none' : 'block',
+              }}>
+                Enter ↵
+              </span>
+
+              {/* Send button */}
+              <button
+                onClick={() => sendMessage(input)}
+                disabled={loading || !input.trim()}
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '13px',
+                  border: 'none',
+                  background: loading || !input.trim()
+                    ? 'rgba(0,0,0,0.05)'
+                    : 'linear-gradient(135deg, #5A7247 0%, #3D4A2E 100%)',
+                  color: loading || !input.trim()
+                    ? 'rgba(0,0,0,0.2)'
+                    : 'white',
+                  cursor: loading || !input.trim() ? 'default' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'all 0.2s ease',
+                  boxShadow: (loading || !input.trim())
+                    ? 'none'
+                    : '0 2px 10px rgba(90,114,71,0.3)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading && input.trim()) {
+                    e.currentTarget.style.transform = 'scale(1.06)'
+                    e.currentTarget.style.boxShadow = '0 4px 18px rgba(90,114,71,0.4)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.boxShadow = (!loading && input.trim())
+                    ? '0 2px 10px rgba(90,114,71,0.3)'
+                    : 'none'
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            maxWidth: '780px',
+            margin: '8px auto 0',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            opacity: 0.7,
+          }}>
+            AI 助手由智谱 GLM-4.5-Air 大模型驱动 · 信息仅供参考 · Shift+Enter 换行
+          </div>
         </div>
       </div>
     </div>

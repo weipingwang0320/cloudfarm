@@ -48,18 +48,28 @@ class AIDiaryService:
                 return content
         return None
 
-    async def ask_farm_assistant(self, question: str, crop_data: dict = None, enable_search: bool = False) -> str:
+    async def ask_farm_assistant(self, question: str, crop_data: dict = None, enable_search: bool = False, history: list = None) -> str:
         if self.provider == "glm" and self.glm_api_key:
             try:
-                if enable_search:
-                    messages = [
-                        {"role": "user", "content": question}
-                    ]
-                else:
-                    messages = [
-                        {"role": "system", "content": "你是一个友好、博学的AI助手，可以回答各种问题。你对农业种植和气象领域有特别的专长，但也会乐于回答用户提出的任何其他问题。回答要专业、易懂、有温度。对于不了解的问题，坦诚说明即可。"},
-                        {"role": "user", "content": question}
-                    ]
+                # Build conversation messages with history
+                messages = [
+                    {"role": "system", "content": "你是一个友好、博学的AI农场助手，精通农业种植与气象知识。回答要专业、易懂、有温度。对于不了解的问题，坦诚说明即可。记住对话历史，保持上下文连贯。"}
+                ]
+
+                # Include conversation history (last N turns) for context
+                if history:
+                    for msg in history:
+                        role = msg.get("role", "user")
+                        text = msg.get("text", "")
+                        if text.strip():
+                            messages.append({
+                                "role": "assistant" if role == "bot" else "user",
+                                "content": text
+                            })
+
+                # Append current question
+                messages.append({"role": "user", "content": question})
+
                 answer = await self._call_glm(messages, temperature=0.7, enable_search=enable_search)
                 if answer:
                     return answer

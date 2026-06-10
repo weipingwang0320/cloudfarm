@@ -2,7 +2,7 @@
    云上田园 - 东方田园诗意风格
    ======================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=ZCOOL+XiaoWei&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&display=swap');
 
 /* === CSS Variables === */
 :root {
@@ -43,8 +43,8 @@
   --shadow-medium: 0 8px 32px rgba(93, 78, 55, 0.12);
 
   /* 字体 */
-  --font-display: 'ZCOOL XiaoWei', 'Noto Serif SC', serif;
-  --font-body: 'Noto Serif SC', serif;
+  --font-display: 'ZCOOL XiaoWei', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-body: 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', sans-serif;
 }
 
 /* === Global Styles === */

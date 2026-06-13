@@ -77,8 +77,8 @@ class AIDiaryService:
                 return content
         return None
 
-    async def _call_mimo(self, messages: list, temperature: float = 0.8) -> Optional[str]:
-        """调用小米 MiMo API (OpenAI 兼容接口)"""
+    async def _call_mimo(self, messages: list, temperature: float = 0.8, enable_search: bool = False) -> Optional[str]:
+        """调用小米 MiMo API (OpenAI 兼容接口，支持联网搜索)"""
         url = f"{MIMO_API_BASE}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.mimo_api_key}",
@@ -90,6 +90,13 @@ class AIDiaryService:
             "temperature": temperature,
             "stream": False,
         }
+        if enable_search:
+            payload["tools"] = [{
+                "type": "web_search",
+                "web_search": {
+                    "enable": True,
+                }
+            }]
         async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
@@ -134,7 +141,7 @@ class AIDiaryService:
 
         elif provider == "mimo" and self.mimo_api_key:
             try:
-                answer = await self._call_mimo(messages, temperature=0.7)
+                answer = await self._call_mimo(messages, temperature=0.7, enable_search=enable_search)
                 if answer:
                     return answer
             except Exception as e:

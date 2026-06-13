@@ -321,6 +321,8 @@ export default function AIAssistantPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [searchEnabled, setSearchEnabled] = useState(false)
+  const [modelProvider, setModelProvider] = useState('glm')
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(() => {
     try {
       const saved = localStorage.getItem(HISTORY_KEY)
@@ -456,6 +458,7 @@ export default function AIAssistantPage() {
         question: text,
         enable_search: searchEnabled,
         history: recentHistory,
+        model_provider: modelProvider,
       })
 
       if (res.data.success) {
@@ -562,7 +565,7 @@ export default function AIAssistantPage() {
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '6px', height: '6px', background: '#4CAF50', borderRadius: '50%', display: 'inline-block' }} />
-              智谱 GLM-4.5-Air{searchEnabled ? ' · 联网搜索' : ''}
+              {modelProvider === 'deepseek' ? 'DeepSeek-V4' : '智谱 GLM-4.5-Air'}{searchEnabled ? ' · 联网搜索' : ''}
             </div>
           </div>
         </div>
@@ -595,6 +598,101 @@ export default function AIAssistantPage() {
             </svg>
             {searchEnabled ? '搜索中' : '联网搜索'}
           </button>
+
+          {/* Model selector */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setModelMenuOpen(!modelMenuOpen)}
+              title="切换AI模型"
+              style={{
+                padding: '7px 14px',
+                borderRadius: '10px',
+                border: '1.5px solid rgba(0,0,0,0.1)',
+                background: 'transparent',
+                color: 'var(--text-secondary)',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease',
+                fontFamily: 'inherit',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              {modelProvider === 'deepseek' ? 'DeepSeek' : 'GLM 智谱'}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{
+                transform: modelMenuOpen ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s',
+              }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            {modelMenuOpen && (
+              <>
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }} onClick={() => setModelMenuOpen(false)} />
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '6px',
+                  background: 'white',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
+                  zIndex: 300,
+                  minWidth: '150px',
+                }}>
+                  <div
+                    onClick={() => { setModelProvider('glm'); setModelMenuOpen(false) }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: modelProvider === 'glm' ? '#5A7247' : '#555',
+                      background: modelProvider === 'glm' ? 'rgba(90,114,71,0.06)' : 'transparent',
+                      fontWeight: modelProvider === 'glm' ? '600' : '400',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(90,114,71,0.05)'}
+                    onMouseLeave={e => e.currentTarget.style.background = modelProvider === 'glm' ? 'rgba(90,114,71,0.06)' : 'transparent'}
+                  >
+                    <span style={{ fontSize: '14px' }}>🧠</span> GLM 智谱
+                    {modelProvider === 'glm' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
+                  </div>
+                  <div style={{ height: '1px', background: '#eee' }} />
+                  <div
+                    onClick={() => { setModelProvider('deepseek'); setModelMenuOpen(false) }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: modelProvider === 'deepseek' ? '#5A7247' : '#555',
+                      background: modelProvider === 'deepseek' ? 'rgba(90,114,71,0.06)' : 'transparent',
+                      fontWeight: modelProvider === 'deepseek' ? '600' : '400',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(90,114,71,0.05)'}
+                    onMouseLeave={e => e.currentTarget.style.background = modelProvider === 'deepseek' ? 'rgba(90,114,71,0.06)' : 'transparent'}
+                  >
+                    <span style={{ fontSize: '14px' }}>⚡</span> DeepSeek
+                    {modelProvider === 'deepseek' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Clear */}
           <button
@@ -1075,7 +1173,7 @@ export default function AIAssistantPage() {
             textAlign: 'center',
             opacity: 0.7,
           }}>
-            AI 助手由智谱 GLM-4.5-Air 大模型驱动 · 信息仅供参考 · Shift+Enter 换行
+            AI 助手由 {modelProvider === 'deepseek' ? 'DeepSeek-V4' : '智谱 GLM-4.5-Air'} 大模型驱动 · 信息仅供参考 · Shift+Enter 换行
           </div>
         </div>
       </div>

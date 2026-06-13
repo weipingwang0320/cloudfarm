@@ -19,5 +19,6 @@ async def ask_assistant(data: dict):
 
     enable_search = data.get("enable_search", False)
     history = data.get("history", None)
-    answer = await ai_diary_service.ask_farm_assistant(question, crop_data, enable_search=enable_search, history=history)
+    model_provider = data.get("model_provider", None) or None
+    answer = await ai_diary_service.ask_farm_assistant(question, crop_data, enable_search=enable_search, history=history, model_provider=model_provider)
     return {"success": True, "data": {"question": question, "answer": answer}}

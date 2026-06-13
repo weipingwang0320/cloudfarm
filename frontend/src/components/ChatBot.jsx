@@ -20,6 +20,8 @@ export default function ChatBot({ onClose }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [searchEnabled, setSearchEnabled] = useState(false)
+  const [modelProvider, setModelProvider] = useState('glm')
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const dragRef = useRef({ startX: 0, startY: 0, startLeft: 0, startTop: 0 })
@@ -74,6 +76,7 @@ export default function ChatBot({ onClose }) {
       const res = await axios.post(`${API_BASE}/diary/ask`, {
         question: text,
         enable_search: searchEnabled,
+        model_provider: modelProvider,
       })
 
       if (res.data.success) {
@@ -232,6 +235,99 @@ export default function ChatBot({ onClose }) {
             </svg>
             {searchEnabled ? '搜索中' : '联网'}
           </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setModelMenuOpen(!modelMenuOpen) }}
+              title="切换AI模型"
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                color: 'white',
+                padding: '5px 10px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              {modelProvider === 'deepseek' ? 'DeepSeek' : 'GLM'}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{
+                transform: modelMenuOpen ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s',
+              }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            {modelMenuOpen && (
+              <>
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }} onClick={() => setModelMenuOpen(false)} />
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '4px',
+                  background: 'white',
+                  borderRadius: '10px',
+                  boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
+                  zIndex: 300,
+                  minWidth: '140px',
+                }}>
+                  <div
+                    onClick={() => { setModelProvider('glm'); setModelMenuOpen(false) }}
+                    style={{
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: modelProvider === 'glm' ? '#5A7247' : '#555',
+                      background: modelProvider === 'glm' ? 'rgba(90,114,71,0.08)' : 'transparent',
+                      fontWeight: modelProvider === 'glm' ? '600' : '400',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(90,114,71,0.06)'}
+                    onMouseLeave={e => e.currentTarget.style.background = modelProvider === 'glm' ? 'rgba(90,114,71,0.08)' : 'transparent'}
+                  >
+                    <span style={{ fontSize: '14px' }}>🧠</span> GLM 智谱
+                    {modelProvider === 'glm' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
+                  </div>
+                  <div style={{ height: '1px', background: '#eee' }} />
+                  <div
+                    onClick={() => { setModelProvider('deepseek'); setModelMenuOpen(false) }}
+                    style={{
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: modelProvider === 'deepseek' ? '#5A7247' : '#555',
+                      background: modelProvider === 'deepseek' ? 'rgba(90,114,71,0.08)' : 'transparent',
+                      fontWeight: modelProvider === 'deepseek' ? '600' : '400',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(90,114,71,0.06)'}
+                    onMouseLeave={e => e.currentTarget.style.background = modelProvider === 'deepseek' ? 'rgba(90,114,71,0.08)' : 'transparent'}
+                  >
+                    <span style={{ fontSize: '14px' }}>⚡</span> DeepSeek
+                    {modelProvider === 'deepseek' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={(e) => { e.stopPropagation(); onClose() }}
             style={{

@@ -67,6 +67,10 @@ class CalendarEngine:
                 frost_start = self._parse_mmdd(frost["frost_free_start"], year)
                 frost_end = self._parse_mmdd(frost["frost_free_end"], year)
 
+                # 处理跨年无霜期（如南亚热带：1月20日→次年1月10日）
+                if frost_end <= frost_start:
+                    frost_end = date(year + 1, frost_end.month, frost_end.day)
+
                 if stage_start < frost_start:
                     stage_start = frost_start
                     stage_end = stage_start + timedelta(days=adjusted_days - 1)

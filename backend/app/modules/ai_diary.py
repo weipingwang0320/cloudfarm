@@ -6,6 +6,7 @@ from app.config import settings
 
 GLM_API_BASE = "https://open.bigmodel.cn/api/paas/v4"
 DEEPSEEK_API_BASE = "https://api.deepseek.com/v1"
+MIMO_API_BASE = "https://api.xiaomimimo.com/v1"
 
 
 class AIDiaryService:
@@ -15,6 +16,8 @@ class AIDiaryService:
         self.glm_model = settings.GLM_MODEL
         self.deepseek_api_key = settings.DEEPSEEK_API_KEY
         self.deepseek_model = settings.DEEPSEEK_MODEL
+        self.mimo_api_key = settings.MIMO_API_KEY
+        self.mimo_model = settings.MIMO_MODEL
 
     async def _call_glm(self, messages: list, temperature: float = 0.8, enable_search: bool = False) -> Optional[str]:
         url = f"{GLM_API_BASE}/chat/completions"
@@ -74,6 +77,29 @@ class AIDiaryService:
                 return content
         return None
 
+    async def _call_mimo(self, messages: list, temperature: float = 0.8) -> Optional[str]:
+        """调用小米 MiMo API (OpenAI 兼容接口)"""
+        url = f"{MIMO_API_BASE}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.mimo_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.mimo_model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": False,
+        }
+        async with httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            if "choices" in data and len(data["choices"]) > 0:
+                choice = data["choices"][0]
+                content = choice["message"]["content"].strip()
+                return content
+        return None
+
     async def ask_farm_assistant(self, question: str, crop_data: dict = None, enable_search: bool = False, history: list = None, model_provider: str = None) -> str:
         # 确定使用哪个模型提供商：请求指定 > 默认配置
         provider = model_provider or self.default_provider
@@ -105,6 +131,14 @@ class AIDiaryService:
                     return answer
             except Exception as e:
                 print(f"DeepSeek API error: {e}")
+
+        elif provider == "mimo" and self.mimo_api_key:
+            try:
+                answer = await self._call_mimo(messages, temperature=0.7)
+                if answer:
+                    return answer
+            except Exception as e:
+                print(f"MiMo API error: {e}")
 
         elif provider == "glm" and self.glm_api_key:
             try:

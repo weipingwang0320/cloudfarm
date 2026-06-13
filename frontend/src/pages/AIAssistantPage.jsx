@@ -565,7 +565,7 @@ export default function AIAssistantPage() {
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '6px', height: '6px', background: '#4CAF50', borderRadius: '50%', display: 'inline-block' }} />
-              {modelProvider === 'deepseek' ? 'DeepSeek-V4' : '智谱 GLM-4.5-Air'}{searchEnabled ? ' · 联网搜索' : ''}
+              {modelProvider === 'deepseek' ? 'DeepSeek-V4' : modelProvider === 'mimo' ? '小米 MiMo v2.5' : '智谱 GLM-4.5-Air'}{searchEnabled ? ' · 联网搜索' : ''}
             </div>
           </div>
         </div>
@@ -625,7 +625,7 @@ export default function AIAssistantPage() {
                 <path d="M2 17l10 5 10-5"/>
                 <path d="M2 12l10 5 10-5"/>
               </svg>
-              {modelProvider === 'deepseek' ? 'DeepSeek' : 'GLM 智谱'}
+              {modelProvider === 'deepseek' ? 'DeepSeek' : modelProvider === 'mimo' ? 'MiMo' : 'GLM 智谱'}
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{
                 transform: modelMenuOpen ? 'rotate(180deg)' : 'none',
                 transition: 'transform 0.2s',
@@ -688,6 +688,27 @@ export default function AIAssistantPage() {
                   >
                     <span style={{ fontSize: '14px' }}>⚡</span> DeepSeek
                     {modelProvider === 'deepseek' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
+                  </div>
+                  <div style={{ height: '1px', background: '#eee' }} />
+                  <div
+                    onClick={() => { setModelProvider('mimo'); setModelMenuOpen(false) }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: modelProvider === 'mimo' ? '#5A7247' : '#555',
+                      background: modelProvider === 'mimo' ? 'rgba(90,114,71,0.06)' : 'transparent',
+                      fontWeight: modelProvider === 'mimo' ? '600' : '400',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(90,114,71,0.05)'}
+                    onMouseLeave={e => e.currentTarget.style.background = modelProvider === 'mimo' ? 'rgba(90,114,71,0.06)' : 'transparent'}
+                  >
+                    <span style={{ fontSize: '14px' }}>📱</span> 小米 MiMo
+                    {modelProvider === 'mimo' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
                   </div>
                 </div>
               </>
@@ -1173,7 +1194,7 @@ export default function AIAssistantPage() {
             textAlign: 'center',
             opacity: 0.7,
           }}>
-            AI 助手由 {modelProvider === 'deepseek' ? 'DeepSeek-V4' : '智谱 GLM-4.5-Air'} 大模型驱动 · 信息仅供参考 · Shift+Enter 换行
+            AI 助手由 {modelProvider === 'deepseek' ? 'DeepSeek-V4' : modelProvider === 'mimo' ? '小米 MiMo v2.5' : '智谱 GLM-4.5-Air'} 大模型驱动 · 信息仅供参考 · Shift+Enter 换行
           </div>
         </div>
       </div>

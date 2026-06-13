@@ -260,7 +260,7 @@ export default function ChatBot({ onClose }) {
                 <path d="M2 17l10 5 10-5"/>
                 <path d="M2 12l10 5 10-5"/>
               </svg>
-              {modelProvider === 'deepseek' ? 'DeepSeek' : 'GLM'}
+              {modelProvider === 'deepseek' ? 'DeepSeek' : modelProvider === 'mimo' ? 'MiMo' : 'GLM'}
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{
                 transform: modelMenuOpen ? 'rotate(180deg)' : 'none',
                 transition: 'transform 0.2s',
@@ -323,6 +323,27 @@ export default function ChatBot({ onClose }) {
                   >
                     <span style={{ fontSize: '14px' }}>⚡</span> DeepSeek
                     {modelProvider === 'deepseek' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
+                  </div>
+                  <div style={{ height: '1px', background: '#eee' }} />
+                  <div
+                    onClick={() => { setModelProvider('mimo'); setModelMenuOpen(false) }}
+                    style={{
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: modelProvider === 'mimo' ? '#5A7247' : '#555',
+                      background: modelProvider === 'mimo' ? 'rgba(90,114,71,0.08)' : 'transparent',
+                      fontWeight: modelProvider === 'mimo' ? '600' : '400',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(90,114,71,0.06)'}
+                    onMouseLeave={e => e.currentTarget.style.background = modelProvider === 'mimo' ? 'rgba(90,114,71,0.08)' : 'transparent'}
+                  >
+                    <span style={{ fontSize: '14px' }}>📱</span> 小米 MiMo
+                    {modelProvider === 'mimo' && <span style={{ marginLeft: 'auto', color: '#5A7247' }}>✓</span>}
                   </div>
                 </div>
               </>

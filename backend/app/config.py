@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_MODEL: str = "deepseek-chat"
 
+    # 小米 MiMo 配置 (https://platform.xiaomimimo.com/)
+    MIMO_API_KEY: str = ""
+    MIMO_MODEL: str = "mimo-v2.5"
+
     WEATHER_API_BASE: str = "https://api.open-meteo.com/v1"
     DEFAULT_LATITUDE: float = 30.50
     DEFAULT_LONGITUDE: float = 114.34

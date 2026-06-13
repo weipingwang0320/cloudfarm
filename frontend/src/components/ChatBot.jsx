@@ -210,6 +210,7 @@ export default function ChatBot({ onClose }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {modelProvider !== 'deepseek' && (
           <button
             onClick={(e) => { e.stopPropagation(); setSearchEnabled(!searchEnabled) }}
             title={searchEnabled ? '关闭联网搜索' : '开启联网搜索'}
@@ -235,6 +236,7 @@ export default function ChatBot({ onClose }) {
             </svg>
             {searchEnabled ? '搜索中' : '联网'}
           </button>
+          )}
           <div style={{ position: 'relative' }}>
             <button
               onClick={(e) => { e.stopPropagation(); setModelMenuOpen(!modelMenuOpen) }}

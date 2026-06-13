@@ -571,7 +571,8 @@ export default function AIAssistantPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          {/* Search toggle */}
+          {/* Search toggle — DeepSeek 不支持联网搜索 */}
+          {modelProvider !== 'deepseek' && (
           <button
             onClick={() => setSearchEnabled(!searchEnabled)}
             title={searchEnabled ? '关闭联网搜索' : '开启联网搜索'}
@@ -598,6 +599,7 @@ export default function AIAssistantPage() {
             </svg>
             {searchEnabled ? '搜索中' : '联网搜索'}
           </button>
+          )}
 
           {/* Model selector */}
           <div style={{ position: 'relative' }}>
